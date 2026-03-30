@@ -52,7 +52,7 @@ if %errorlevel% neq 0 (
     echo  ✓  Dependencies OK
 )
 
-echo [4/4] Starting server...
+echo [4/4] Starting server and opening browser...
 echo.
 echo  ┌─────────────────────────────────────────┐
 echo  │  UI:   http://localhost:8000             │
@@ -60,5 +60,8 @@ echo  │  API:  http://localhost:8000/docs        │
 echo  │  Press Ctrl+C to stop                   │
 echo  └─────────────────────────────────────────┘
 echo.
+
+REM Automatically open the default web browser after 3 seconds
+start /B cmd /c "timeout /t 3 /nobreak >nul & start http://localhost:8000"
 
 python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
