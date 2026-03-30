@@ -11,6 +11,12 @@
 <br/>
 
 > **🔗 Live Demo:** Currently accessible via (https://unequilateral-upbraidingly-rena.ngrok-free.dev) (Deployed locally).
+> 
+> **How to Access the Live Demo:**
+> 1. Click the Ngrok Tunnel link above.
+> 2. You will see a standard warning screen from Ngrok (this is normal for free tunnels).
+> 3. Click the **"Visit Site"** button on that screen.
+> 4. The application dashboard will load directly from my local machine! Feel free to run prompt evaluations to see it in action.
 
 > **Stop guessing which prompt works best.** Connect locally to Ollama and systematically grade prompt engineering variations to scientifically determine which prompts produce the absolute best outputs.
 
