@@ -28,7 +28,22 @@ Before running this project you need:
 
 1. **Python 3.9+** — [Download Python](https://python.org/downloads)
 2. **Ollama** — [Download Ollama](https://ollama.com/download)
-3. **At least one Ollama model** — e.g., `phi3:mini`, `llama3`, `mistral`
+3. **At least one Ollama model** — e.g., `phi3:mini`
+
+---
+
+## 🤖 Recommended Local Models
+
+Because this project uses **LLM-as-a-Judge** to evaluate hallucinations and rewrite poor prompts automatically, performance relies heavily on how "smart" your local model is.
+
+| Model | Size | Best For | Start Command |
+|-------|------|----------|---------------|
+| **llama3** (or 3.1) | 8B | **Best Overall.** Excellent at prompt generation, strictly following formatting bounds, and understanding nuanced references. Needs 8GB+ RAM. | `ollama pull llama3` |
+| **phi3:mini** | 3.8B | **Fastest / Default.** Extremely fast inference for Batch/Matrix testing. Can run on almost any older hardware or laptop without dedicated GPUs. | `ollama pull phi3:mini` |
+| **qwen2.5:7b** | 7B | **Best Reasoner.** Currently dominating open-source charts for strictly following instructions and generating code (e.g. JSON/XML formats). | `ollama pull qwen2.5:7b` |
+| **mistral** | 7B | **Reliable Middleman.** A resilient, uncensored fallback model if Llama3 is too slow on your hardware. | `ollama pull mistral` |
+
+> **Pro Tip:** Use the **Matrix Tab** in this application to evaluate the exact same prompt across `phi3:mini`, `llama3`, and `qwen2.5` simultaneously to mathematically prove which one handles your specific use-case best!
 
 ---
 
