@@ -55,10 +55,12 @@ def _create_score_chart(scores, filepath):
 
 
 def _safe_text(text, max_len=80):
-    """Truncate text for PDF table cells."""
+    """Truncate and sanitize text for PDF table cells (latin-1)."""
     if not text:
         return ""
     text = str(text).replace("\n", " ").replace("\r", "")
+    # FPDF's default font only supports latin-1. Replace unsupported chars (e.g., emojis)
+    text = text.encode('latin-1', 'replace').decode('latin-1')
     if len(text) > max_len:
         return text[:max_len] + "..."
     return text
@@ -76,6 +78,7 @@ def generate_pdf_report(results, model_name="Unknown", temperature=0.7):
     Returns:
         bytes: The PDF file content as bytes
     """
+    model_name = model_name.encode('latin-1', 'replace').decode('latin-1')
     pdf = EvalReport()
     pdf.alias_nb_pages()
     pdf.add_page()
