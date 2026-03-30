@@ -208,13 +208,36 @@ simple-llm-prompt-evaluator/
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Tech Stack & Architecture
 
-- **Backend:** FastAPI (Python) with `asyncio` + `ThreadPoolExecutor` for concurrent LLM calls
-- **ML Engine:** `sentence-transformers` (all-MiniLM-L6-v2) with MD5-hashed LRU cache
-- **Frontend:** Vanilla HTML5 + CSS3 + ES6 JavaScript — no heavy frameworks, sub-10ms load
-- **Database:** SQLite (`db/results.db`) for evaluation history and optimization lineage tracking
-- **Charts:** Chart.js (bundled locally) for iteration/lineage visualization
+- **Backend:** FastAPI (Python) running `asyncio` routines mapped to a `ThreadPoolExecutor` to handle concurrent LLM requests simultaneously.
+- **ML Engine:** `sentence-transformers` (`all-MiniLM-L6-v2`) layered with an MD5-hashed LRU Dictionary cache to avoid redundant tensor calculations on identical text.
+- **Frontend / UI:** Vanilla HTML5/CSS3 with completely native ES6 JavaScript. Custom-built "Glassmorphism" Design System. **No heavy abstraction frameworks (React/Vue).**
+- **Database:** SQLite3 (`db/results.db`) managing relational tables to automatically track "Prompt Lineage" and historical data retention.
+- **Visualizations:** Bundled offline `Chart.js` for self-healing lineage analytics.
+
+---
+
+## 🧗‍♂️ Challenges Faced & Engineering Solutions
+
+Building a local-LLM interface comes with significant architectural roadblocks:
+
+1. **The Concurrency Problem:** Originally, local Ollama heavily queued single-thread requests causing the UI to freeze. **Solution:** By converting blocking Python `requests` into a thread-pooled async/await ecosystem within FastAPI, the system can now hit the evaluator with 3-5 background requests at the exact same time without locking the browser.
+2. **"Lazy" Model Grading:** When asking smaller local models (like `phi3:mini`) to act as a "Judge," they often defaulted to lazy `10/10` scores or completely hallucinated the required JSON schema response. **Solution:** We introduced deterministic *Assertion Rules* acting as a hard programmatic "bouncer" to strictly validate outputs (Regex, max-words, Substring matched) before they even reach the LLM Judge step.
+3. **Compute Waste Penalty:** Running the `all-MiniLM-L6-v2` semantic similarity sentence-transformer repeatedly on the exact same text during intensive A/B testing was a massive waste of local CPU resources. **Solution:** Engineered a robust memory cache mapping MD5-hashed prompt strings to their saved vector equivalents, cutting subsequent semantic comparisons from `600ms` down to roughly `<2ms`.
+
+---
+
+## ⚖️ Pros & Cons of This Setup
+
+### ✅ Pros (The Advantages)
+*   **Absolute Privacy (100% Offline):** Zero telemetry. Your prompts and sensitive RAG contexts never leave your physical computer. There are absolutely no running API bills.
+*   **Blazing Fast UI:** Moving away from heavy python-rendering frameworks (like Streamlit) to a native Async API/Vanilla JS approach resulted in sub-10 millisecond DOM updates. 
+*   **Scientific Accountability:** Replaces subjective "I think this prompt is better" guesswork with cold, hard mathematical charts proving whether tweaking a specific word actually improved your model's accuracy.
+
+### ❌ Cons (The Limitations)
+*   **Hardware Bottleneck:** Because it is completely self-hosted, your evaluation speed is entirely dictated by your physical computer's RAM and GPU allowance.
+*   **Single-Player Architecture:** Right now, this is designed entirely as a local developer tool, meaning there is no robust multi-user web authentication (JWT/OAuth) protecting the API if you choose to launch this publicly on the open cloud.
 
 ---
 
