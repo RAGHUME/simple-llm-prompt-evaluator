@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Eval — Prompt Optimization System</title>
+<meta name="description" content="Evaluate, compare, and optimize LLM prompts with real-time scoring using BLEU, ROUGE, semantic similarity, and LLM-as-Judge metrics.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="loading-box">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loading-text">Evaluating prompts...</div>
+    <div class="loading-sub" id="loading-sub">Calling Ollama API</div>
+    <div class="loading-timer" id="loading-timer">0.0s</div>
+    <div class="loading-progress"><div class="loading-progress-bar" id="loading-bar"></div></div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<div class="app">
+
+  <!-- ══ SIDEBAR ══ -->
+  <div class="sidebar">
+    <div class="logo-wrap">
+      <div class="logo-row">
+        <div class="logo-mark">LE</div>
+        <div style="flex:1">
+          <div class="logo-text">LLM Eval</div>
+          <div class="logo-ver">v3.0 · open source</div>
+        </div>
+        <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <span class="nav-group-label">Workspace</span>
+      <div class="nav-item active" onclick="showPage('evaluate')" id="nav-evaluate">
+        <span class="nav-ic"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1.2" fill="currentColor"/><rect x="8" y="1" width="5" height="5" rx="1.2" fill="currentColor"/><rect x="1" y="8" width="5" height="5" rx="1.2" fill="currentColor"/><rect x="8" y="8" width="5" height="5" rx="1.2" fill="currentColor"/></svg></span>
+        Evaluate
+      </div>
+      <div class="nav-item" onclick="showPage('dataset')" id="nav-dataset">
+        <span class="nav-ic"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="2" width="12" height="3" rx="1" fill="currentColor" opacity=".3"/><rect x="1" y="6" width="12" height="3" rx="1" fill="currentColor" opacity=".6"/><rect x="1" y="10" width="12" height="3" rx="1" fill="currentColor"/></svg></span>
+        Dataset Mode
+      </div>
+      <div class="nav-item" onclick="showPage('iterations')" id="nav-iterations">
+        <span class="nav-ic"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 9l4-4 3 2 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        Iterations
+        <span class="nav-badge" id="nav-badge-iterations" style="display:none">0</span>
+      </div>
+      <div class="nav-item" onclick="showPage('compare')" id="nav-compare">
+        <span class="nav-ic"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="4" height="12" rx="1" fill="currentColor" opacity=".5"/><rect x="9" y="4" width="4" height="9" rx="1" fill="currentColor"/></svg></span>
+        Compare
+      </div>
+      <div class="nav-item" onclick="showPage('matrix')" id="nav-matrix">
+        <span class="nav-ic"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="3" height="3" rx=".6" fill="currentColor" opacity=".4"/><rect x="5.5" y="1" width="3" height="3" rx=".6" fill="currentColor" opacity=".6"/><rect x="10" y="1" width="3" height="3" rx=".6" fill="currentColor" opacity=".8"/><rect x="1" y="5.5" width="3" height="3" rx=".6" fill="currentColor" opacity=".6"/><rect x="5.5" y="5.5" width="3" height="3" rx=".6" fill="currentColor"/><rect x="10" y="5.5" width="3" height="3" rx=".6" fill="currentColor" opacity=".7"/><rect x="1" y="10" width="3" height="3" rx=".6" fill="currentColor" opacity=".8"/><rect x="5.5" y="10" width="3" height="3" rx=".6" fill="currentColor" opacity=".5"/><rect x="10" y="10" width="3" height="3" rx=".6" fill="currentColor"/></svg></span>
+        Matrix
+        <span class="nav-badge-new">NEW</span>
+      </div>
+      <div class="nav-item" onclick="showPage('history')" id="nav-history">
+        <span class="nav-ic"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M7 4v3.5l2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span>
+        History
+        <span class="nav-badge" id="nav-badge-history" style="display:none">0</span>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="status-card" id="system-status">
+        <div class="status-title">System status</div>
+        <div class="status-row"><span class="s-dot" style="background:var(--text-muted)"></span>Connecting...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ MAIN ══ -->
+  <div class="main">
+
+    <!-- ─── PAGE: EVALUATE ─── -->
+    <div class="page active" id="page-evaluate">
+      <div class="topbar">
+        <div class="topbar-left">
+          <span class="breadcrumb">Workspace / <span>Evaluate</span></span>
+        </div>
+        <div class="topbar-right">
+          <label class="toggle-label">
+            <input type="checkbox" id="rag-toggle">
+            <span class="toggle-switch"></span>
+            RAG Mode
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="judge-toggle">
+            <span class="toggle-switch"></span>
+            LLM Judge
+          </label>
+          <button class="btn" onclick="fillTemplates()">Templates</button>
+          <button class="btn" onclick="clearEvaluateAll()">Clear</button>
+          <button class="btn primary" id="btn-run-eval" onclick="runEvaluation()">Evaluate →</button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="eval-layout">
+          <div class="eval-left">
+            <div style="margin-bottom:14px">
+              <div class="field-label">Your question / task</div>
+              <textarea id="query-input" rows="2" placeholder="e.g., Explain how neural networks learn through backpropagation"></textarea>
+            </div>
+            <div style="margin-bottom:14px">
+              <div class="field-label">Reference answer <span class="optional-tag">optional</span></div>
+              <textarea id="reference-input" rows="2" placeholder="The ideal answer to measure accuracy against..."></textarea>
+            </div>
+            <!-- RAG Context (shown when RAG mode is ON) -->
+            <div style="margin-bottom:14px;display:none" id="rag-context-wrap">
+              <div class="field-label">Context / Retrieved Documents <span class="rag-badge">RAG</span></div>
+              <textarea id="rag-context-input" rows="3" placeholder="Paste the context or retrieved documents that the LLM should use to answer..."></textarea>
+            </div>
+            <div style="margin-bottom:14px">
+              <div class="field-label">Model</div>
+              <div class="model-tabs" id="model-tabs-container">
+                <div class="model-tab active" data-model="phi3:mini" onclick="selectTab(this)">phi3:mini</div>
+              </div>
+            </div>
+            <div>
+              <div class="field-label">Prompt variants</div>
+              <div id="prompt-list"></div>
+              <div class="add-prompt-btn" onclick="addPrompt()">+ Add another prompt variant</div>
+            </div>
+            <!-- Assertion Rules -->
+            <div style="margin-top:14px">
+              <div class="field-label" style="cursor:pointer" onclick="toggleAssertions()">Assertion Rules <span class="optional-tag">optional</span> <span id="assert-toggle-icon" style="font-size:10px">▶</span></div>
+              <div id="assertions-panel" style="display:none">
+                <div class="assert-builder" style="display:flex; flex-wrap:wrap; gap:8px;">
+                  <div style="display:flex; gap:8px; width:100%;">
+                    <select id="assert-type-select" class="assert-select" style="flex:1;">
+                      <option value="contains">Must contain</option>
+                      <option value="not_contains">Must NOT contain</option>
+                      <option value="is_json">Must be valid JSON</option>
+                      <option value="regex">Must match regex</option>
+                      <option value="starts_with">Must start with</option>
+                      <option value="max_length">Max word count</option>
+                      <option value="min_length">Min word count</option>
+                    </select>
+                    <button class="btn primary" onclick="addAssertion()" style="padding:7px 12px">+ Add Rule</button>
+                  </div>
+                  <textarea id="assert-value-input" class="assert-input" placeholder="e.g., Python" style="width:100%; min-height:80px; resize:vertical; font-family:monospace; padding:10px;"></textarea>
+                </div>
+                <div id="assertions-list"></div>
+              </div>
+            </div>
+          </div>
+          <div class="eval-right">
+            <div class="guide-box">
+              <div class="card-title">Strategy ladder</div>
+              <div class="ladder-step"><span class="lv-num">1</span><span class="lv-text">"What is X?" — basic</span></div>
+              <div class="ladder-step cur"><span class="lv-num">2</span><span class="lv-text">+ context & examples</span></div>
+              <div class="ladder-step"><span class="lv-num">3</span><span class="lv-text">+ expert role definition</span></div>
+              <div class="ladder-step"><span class="lv-num">4</span><span class="lv-text">+ step-by-step structure</span></div>
+              <div class="ladder-step"><span class="lv-num">5</span><span class="lv-text">+ length constraints</span></div>
+            </div>
+            <div class="tip-box">
+              <div class="tip-title">Quick wins</div>
+              <div class="tip-item"><span class="tip-arrow">→</span>"You are an expert in..."</div>
+              <div class="tip-item"><span class="tip-arrow">→</span>"Think step by step"</div>
+              <div class="tip-item"><span class="tip-arrow">→</span>"Under 150 words"</div>
+              <div class="tip-item"><span class="tip-arrow">→</span>"Give 3 concrete examples"</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: RESULTS ─── -->
+    <div class="page" id="page-results">
+      <div class="topbar">
+        <div class="topbar-left">
+          <span class="breadcrumb">Evaluate / <span>Results</span></span>
+        </div>
+        <div class="topbar-right">
+          <button class="btn ghost" onclick="showPage('evaluate')">← Back</button>
+          <button class="btn" id="btn-improve" onclick="runOptimize()">Improve worst →</button>
+          <button class="btn green" onclick="downloadReport()">Download PDF</button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="stats-row" id="results-stats"></div>
+        <div>
+          <div class="section-head">
+            <span class="section-label">Prompt comparison</span>
+            <span class="section-sub">ranked by total score</span>
+          </div>
+          <div class="result-cards" id="results-cards"></div>
+        </div>
+        <div class="two-col">
+          <div class="card" id="results-analysis"></div>
+          <div class="card" id="results-suggestions"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: OPTIMIZE ─── -->
+    <div class="page" id="page-optimize">
+      <div class="topbar">
+        <div class="topbar-left">
+          <span class="breadcrumb">Results / <span>Optimization</span></span>
+        </div>
+        <div class="topbar-right">
+          <button class="btn ghost" onclick="showPage('results')">← Back</button>
+          <button class="btn primary" onclick="applyOptimized()">Apply improved prompt →</button>
+        </div>
+      </div>
+      <div class="page-body" id="optimize-body"></div>
+    </div>
+
+    <!-- ─── PAGE: DATASET ─── -->
+    <div class="page" id="page-dataset">
+      <div class="topbar">
+        <div class="topbar-left">
+          <span class="breadcrumb">Workspace / <span>Dataset Mode</span></span>
+        </div>
+        <div class="topbar-right">
+          <span style="font-size:11px;color:var(--yellow);background:var(--yellow-bg);padding:3px 10px;border-radius:5px;font-weight:600" id="ds-badge">0 loaded</span>
+          <button class="btn" onclick="clearDataset()">Clear</button>
+          <button class="btn green" id="btn-export-opt" style="display:none;" onclick="exportOptimizedCSV()">Download CSV</button>
+          <button class="btn" id="btn-opt-batch" style="display:none; border-color:var(--accent); color:var(--accent);" onclick="runDatasetOptimize()">Optimize Failed Prompts</button>
+          <button class="btn primary" id="btn-run-batch" onclick="runBatchEval()">Run batch →</button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="stats-row" id="dataset-stats">
+          <div class="stat-card"><div class="stat-label">Questions</div><div class="stat-value" id="ds-count">0</div><div class="stat-sub">loaded</div></div>
+          <div class="stat-card"><div class="stat-label">Evaluated</div><div class="stat-value" id="ds-evaluated">0</div><div class="stat-sub">completed</div></div>
+          <div class="stat-card"><div class="stat-label">Avg Score</div><div class="stat-value" id="ds-avg">—</div><div class="stat-sub">across dataset</div></div>
+          <div class="stat-card"><div class="stat-label">Time</div><div class="stat-value" id="ds-time">—</div><div class="stat-sub">total elapsed</div></div>
+        </div>
+        
+        <!-- Standard Batch View -->
+        <div class="two-col" id="ds-standard-view">
+          <div>
+            <div class="upload-zone" id="upload-zone" onclick="document.getElementById('csv-upload').click()">
+              <input type="file" id="csv-upload" style="display:none" accept=".csv" onchange="handleCSVUpload(event)">
+              <div style="font-size:28px;margin-bottom:8px;opacity:0.6">📂</div>
+              <div class="upload-title">Upload dataset (.csv)</div>
+              <div class="upload-sub">Columns: prompt, expected_output, category (optional)</div>
+            </div>
+            <div class="card" style="margin-top:10px; max-height: 400px; overflow-y: auto;">
+              <div class="card-title">Loaded questions</div>
+              <table class="data-table">
+                <thead><tr><th>#</th><th>Prompt</th><th>Expected</th></tr></thead>
+                <tbody id="ds-table-body"><tr><td colspan="3" class="empty-state">Upload a CSV to start</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card" style="max-height: 520px; overflow-y: auto;">
+            <div class="card-title">Batch Results</div>
+            <table class="data-table">
+              <thead><tr><th>#</th><th>Prompt</th><th>Score</th><th>Time</th></tr></thead>
+              <tbody id="ds-results-body"><tr><td colspan="4" class="empty-state">Run evaluation to see results</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Optimized Batch View -->
+        <div id="ds-optimized-view" style="display: none;">
+          <div class="card" style="max-height: 520px; overflow-y: auto;">
+            <div class="card-title" style="display:flex; justify-content:space-between;">
+              <span>Optimization Results</span>
+              <span style="font-size:11px;font-weight:400;color:var(--text-muted)">Showing Before vs After improvements</span>
+            </div>
+            <table class="data-table">
+              <thead><tr>
+                <th>#</th>
+                <th style="width:35%">Original Prompt</th>
+                <th style="width:35%">Optimized Prompt</th>
+                <th>Score Gain</th>
+              </tr></thead>
+              <tbody id="ds-opt-results-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ─── PAGE: COMPARE ─── -->
+    <div class="page" id="page-compare">
+      <div class="topbar">
+        <div class="topbar-left">
+          <span class="breadcrumb">Workspace / <span>Compare Prompts</span></span>
+        </div>
+        <div class="topbar-right">
+          <span style="font-size:11px;color:var(--text-muted)">Compare multiple prompts side-by-side</span>
+        </div>
+      </div>
+      <div class="page-body">
+        <div style="display:flex;gap:12px;margin-bottom:14px">
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+            <div class="field-label">Prompts to compare (one per line)</div>
+            <textarea id="compare-prompts" rows="4" placeholder="Enter 2+ prompts, each on its own line..."></textarea>
+          </div>
+          <div style="width:260px;display:flex;flex-direction:column;gap:8px">
+            <div class="field-label">Expected output</div>
+            <textarea id="compare-expected" rows="2" placeholder="The ideal answer..."></textarea>
+            <button class="btn primary" onclick="runCompare()">Compare →</button>
+          </div>
+        </div>
+        <div class="compare-grid" id="compare-grid"></div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: MATRIX ─── -->
+    <div class="page" id="page-matrix">
+      <div class="topbar">
+        <div class="topbar-left">
+          <span class="breadcrumb">Workspace / <span>Multi-Model Matrix</span></span>
+        </div>
+        <div class="topbar-right">
+          <label class="toggle-label">
+            <input type="checkbox" id="matrix-judge-toggle">
+            <span class="toggle-switch"></span>
+            LLM Judge
+          </label>
+          <button class="btn primary" id="btn-run-matrix" onclick="runMatrix()">Run Matrix →</button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="matrix-config">
+          <div class="matrix-config-left">
+            <div style="margin-bottom:14px">
+              <div class="field-label">Prompts to test (one per line)</div>
+              <textarea id="matrix-prompts" rows="4" placeholder="Explain what REST APIs are&#10;Define microservices architecture&#10;What is containerization?"></textarea>
+            </div>
+            <div>
+              <div class="field-label">Expected output / Reference answer</div>
+              <textarea id="matrix-expected" rows="2" placeholder="The ideal answer to score against..."></textarea>
+            </div>
+          </div>
+          <div class="matrix-config-right">
+            <div class="field-label">Select models to test</div>
+            <div id="matrix-model-checkboxes" class="matrix-model-list">
+              <div class="matrix-model-loading">Loading models...</div>
+            </div>
+            <div class="matrix-hint">
+              <span style="color:var(--yellow)">💡</span>
+              Select 2+ models to compare which one handles your prompt best — tests run concurrently.
+            </div>
+          </div>
+        </div>
+        <div id="matrix-results" style="margin-top:16px"></div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: ITERATIONS ─── -->
+    <div class="page" id="page-iterations">
+      <div class="topbar">
+        <div class="topbar-left">
+          <span class="breadcrumb">Workspace / <span>Iterations</span></span>
+        </div>
+        <div class="topbar-right">
+          <span style="font-size:11px;color:var(--text-muted)" id="iterations-count">0 lineages tracked</span>
+          <button class="btn" onclick="fetchIterations()">Refresh</button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div id="iterations-list" style="display: flex; flex-direction: column; gap: 20px;"></div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: HISTORY ─── -->
+    <div class="page" id="page-history">
+      <div class="topbar">
+        <div class="topbar-left">
+          <span class="breadcrumb">Workspace / <span>History</span></span>
+        </div>
+        <div class="topbar-right">
+          <span style="font-size:11px;color:var(--text-muted)" id="history-count">0 total runs</span>
+          <button class="btn danger" onclick="clearAllHistory()">Clear all</button>
+          <button class="btn" onclick="fetchHistory()">Refresh</button>
+          <button class="btn green" onclick="downloadReport()">Download PDF</button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="stats-row" id="history-stats"></div>
+        <div class="card" style="overflow: auto; max-height: 500px;">
+          <table class="data-table">
+            <thead><tr><th>Date</th><th>Prompt</th><th>Model</th><th>Score</th><th>Similarity</th><th>Feedback</th><th>Actions</th></tr></thead>
+            <tbody id="history-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── HISTORY DETAIL MODAL ─── -->
+    <div class="modal-overlay" id="history-detail-modal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <div class="modal-title">Evaluation Details</div>
+          <button class="modal-close" onclick="closeHistoryDetail()">&times;</button>
+        </div>
+        <div class="modal-body" id="history-detail-body">
+          <div class="empty-state">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<script src="/static/js/chart.umd.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>
