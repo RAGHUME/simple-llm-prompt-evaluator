@@ -80,3 +80,46 @@ Below is a walkthrough of every tab in the system and exactly how to use them wi
 **Purpose:** Accountability, auditing, and PDF reporting.
 **Example Scenario:** Your manager wants to know why you chose `phi3:mini` over `llama3`.
 *   **Action:** Go to the History tab. You will see every evaluation you've ever run. Click **View** on the specific run to pull up the detailed analysis popup. Prove your choice with hard metrics, then click **Download PDF** to export a professional, pre-formatted report to share with stakeholder management.
+
+---
+
+## 💡 Example Prompts Library
+
+Here are several prompt testing examples you can copy-paste directly into the **Evaluate Tab** to see how your local LLM reacts to different engineering strategies.
+
+### 1. Zero-Shot Testing (The Baseline)
+*Testing if the model already knows how to perform an abstraction without examples.*
+*   **Prompt:** `Classify the sentiment of this review as Positive, Neutral, or Negative: "The food was okay, but the service was terrible."`
+*   **Expected Output:** `Negative`
+
+### 2. Few-Shot Testing (Pattern Matching)
+*Giving the model examples to strictly enforce output formatting.*
+*   **Prompt:** 
+    ```text
+    Extract the airport codes from the text.
+    Text: "I flew from Boston to New York." -> Output: BOS, JFK
+    Text: "The flight from London landed in Tokyo." -> Output: LHR, HND
+    Text: "We are traveling from San Francisco to Paris." -> Output:
+    ```
+*   **Expected Output:** `SFO, CDG`
+
+### 3. Chain-of-Thought (Reasoning)
+*Forcing the model to "think" step-by-step before answering to improve logical accuracy.*
+*   **Prompt:** `A farmer has 15 sheep. All but 8 die. How many are left? Think step-by-step, then provide the final number at the very end.`
+*   **Expected Output:** `8` *(Note: The LLM will output its reasoning, but the Expected Output focuses on the final correct number being present).*
+
+### 4. Role-Based Constraint Testing
+*Testing if the model can adopt a persona and adhere to a strict negative constraint (something it is NOT allowed to do).*
+*   **Prompt:** `You are a strict Python code generator. Write a function to reverse a string. Do NOT provide any explanations, greetings, or markdown formatting. Return ONLY the raw python code.`
+*   **Expected Output:** 
+    ```python
+    def reverse_string(s):
+        return s[::-1]
+    ```
+
+### 5. RAG Hallucination Testing
+*Testing the Faithfulness judge. Paste the Context into the RAG Context box.*
+*   **Context:** `Acme Corp reported $1.2M in Q3 revenue. The CEO is Jane Doe.`
+*   **Prompt:** `Who is the CEO of Acme Corp and what was their Q4 revenue?`
+*   **Expected Output:** `The CEO is Jane Doe. The provided context does not mention Q4 revenue.`
+*(If the LLM makes up a Q4 revenue number, the LLM-as-a-Judge will instantly flag it as a Hallucination and drop the score).*
