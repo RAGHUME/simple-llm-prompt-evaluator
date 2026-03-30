@@ -24,94 +24,140 @@ We completely stripped out the old Streamlit framework and replaced it with a cu
 
 ---
 
-## 🎓 Step-by-Step UI Application Guide
+## 🚀 How to Run the Project
 
-Here is exactly how to navigate each tab of the dashboard to optimize your prompts like a professional AI Engineer.
+Running the project is now fully automated.
 
-### 1. The Evaluate Tab (Single & Variant Testing)
-**Goal:** Test your core idea against different "styles" of prompting to see which the model responds best to.
+1. Keep **Ollama** running in the background (`ollama serve`).
+2. Open a terminal in the root project folder.
+3. Execute `.\start.bat` (Windows).
 
-*   **Step 1:** In the **Prompt** box, paste your baseline instruction. *(Example: `Extract the flight details into JSON.`)*
-*   **Step 2:** In the **Context (RAG)** box, paste the actual email you are extracting from. *(Example: `"Your flight AA123 departs Boston at 5 PM."`)*
-*   **Step 3:** In the **Expected Output** box, write exactly what a perfect response looks like. *(Example: `{"flight": "AA123", "departure": "BOS"}`)*
-*   **Step 4 (Assertions):** Click "Add Rule" and select **Valid JSON**. This forces the evaluator to instantly flag the response as a failure if the LLM adds conversational text like *"Here is your JSON:"*.
-*   **Step 5:** Hit **Evaluate →**. 
-*   **Result:** You will instantly see your score (0 to 100) and receive a verbal critique from the AI Judge on why it succeeded or failed!
-
-### 2. The Iterations Tab (Self-Healing Loop)
-**Goal:** Watch the AI automatically fix a prompt that scored poorly.
-
-*   **Step 1:** Go back to your Evaluate Tab result card for the prompt you just ran.
-*   **Step 2:** If it scored under an 80%, click the green **Improve Worst** button. 
-*   **Step 3:** The LLM Optimizer will spin up in the background. Wait about 15 seconds.
-*   **Step 4:** Navigate to the **Iterations** tab on the sidebar.
-*   **Result:** You will see a beautiful `Chart.js` line graph showing exactly how your score jumped from 32/100 to 98/100 across 3 attempts. Below it, the AI will hand you the *perfected* prompt: `Extract the flight details strictly into a JSON dictionary with no markdown formatting. Do not output anything else but the code.`
-
-### 3. The Dataset Tab (Batch Processing)
-**Goal:** Run massive spreadsheets (CSV) of prompts through the evaluator without locking up your browser.
-
-*   **Step 1:** Prepare a `.csv` file with two headers: `prompt` and `expected_output`.
-*   **Step 2:** Drag and drop your `prompts.csv` explicitly into the dashed box on the dataset page. 
-*   **Step 3:** Select your fastest model (like `phi3:mini`) and click **Run Batch**.
-*   **Result:** The system will process them concurrently in chunks of 5 using background thread pools. You will get a final table revealing that perhaps 82% of the prompts passed, with a button to instantly **Download PDF** of the results!
-
-### 4. The Matrix Tab (N × M Grid Testing)
-**Goal:** Figure out which LLM model is the most cost-effective for a specific task.
-
-*   **Step 1:** Paste 3 different ways to ask your question into the Prompt fields.
-*   **Step 2:** Check both `llama3` and `phi3:mini` in the Model selector sidebar.
-*   **Step 3:** Click **Run Matrix**. 
-*   **Result:** You will receive a 2D Heatmap. If `phi3` scores a 92/100 and completes it in 400ms, but `llama3` scores a 94/100 and completes it in 1800ms, the Matrix helps you realize `phi3` is vastly superior for production deployment due to the massive latency savings!
-
-### 5. The Compare Tab (A/B Testing)
-**Goal:** Directly test minor linguistic variations against each other.
-
-*   **Step 1:** Paste **Prompt A:** `You are a financial advisor...`
-*   **Step 2:** Paste **Prompt B:** `Act as a senior financial advisor with 20 years experience...`
-*   **Step 3:** Hit Compare. 
-*   **Result:** You receive a direct side-by-side printout highlighting the response deviation between the two linguistic frames. Use this to determine if adding aggressive persona constraints lowers the model's hallucination rates.
-
-### 6. The History Tab (Auditing)
-**Goal:** Export and audit every evaluation you've ever run.
-
-*   **Step 1:** Go to the **History** tab. You will see every evaluation chronologically.
-*   **Step 2:** Your manager wants to know why you chose a specific prompt. Click the **View** button on a specific run.
-*   **Result:** A detailed analysis popup modal will appear, proving your choice with hard metrics. You can close this and click **Download PDF** to export a professional, pre-formatted report directly to your manager.
+*The `start.bat` script is intelligent: It will automatically find your `venv`, activate it, verify all PIP dependencies are installed, make sure Ollama is responding on Port 11434, and then finally boot the server to `http://localhost:8000`.*
 
 ---
 
-## 💡 Prompt Engineering Library 
+## 📑 Deep-Dive: Tab Walkthroughs & Methodology
 
-Here are several prompt testing examples you can copy-paste directly into the **Evaluate Tab**.
+Below is a detailed, step-by-step masterclass on how to use every capability of the evaluator to achieve production-ready prompts.
 
-### 1. Zero-Shot Testing (The Baseline)
-*Testing if the model already knows how to perform an abstraction without examples.*
-*   **Prompt:** `Classify the sentiment of this review as Positive, Neutral, or Negative: "The food was okay, but the service was terrible."`
-*   **Expected Output:** `Negative`
+### 1. The Evaluate Tab (Single & Variant Testing)
+**Goal:** Testing a core idea across different "styles" (Zero-Shot vs Few-Shot) to mathematically prove which approach the LLM understands better.
+**Scenario:** You are building an app that summarizes medical emails into JSON.
 
-### 2. Few-Shot Testing (Pattern Matching)
-*Giving the model examples to strictly enforce output formatting.*
-*   **Prompt:** 
-    ```text
-    Extract the airport codes from the text.
-    Text: "I flew from Boston to New York." -> Output: BOS, JFK
-    Text: "The flight from London landed in Tokyo." -> Output: LHR, HND
-    Text: "We are traveling from San Francisco to Paris." -> Output:
-    ```
-*   **Expected Output:** `SFO, CDG`
+**Step-by-Step Execution:**
+1. **Context (Optional):** Toggle the `RAG Mode` switch. Paste a raw patient support email into the Context box.
+2. **Setup Variant A:** In the first prompt box, write your basic instinct: `Summarize the following email into JSON.`
+3. **Setup Variant B:** Click `+ Add Variant`. Write a highly constrained version: `Summarize the email into JSON. Example: {"urgency": "high", "topic": "billing"}`
+4. **Set Expected Output:** In the Reference Answer box, type exactly what a perfect answer looks like: `{"urgency": "low", "topic": "appointment"}`
+5. **Run:** Click **Evaluate →**. The engine will spin up background threads to ping Ollama simultaneously. 
+**Result:** You will instantly see a card comparing both variants side-by-side. The engine will grade how closely the LLM's output matched your Expected Output, proving that Variant B yields a 95% similarity while Variant A only yields 40%.
 
-### 3. Constraint Testing 
-*Testing if the model can adhere to a strict negative constraint.*
-*   **Prompt:** `You are a strict Python code generator. Write a function to reverse a string. Do NOT provide any explanations, greetings, or markdown formatting. Return ONLY the raw python code.`
-*   **Expected Output:** 
-    ```python
-    def reverse_string(s):
-        return s[::-1]
-    ```
+### 2. The Dataset Tab (Batch Processing)
+**Goal:** Running massive offline files (`.csv`) through the evaluator without locking up your browser.
+**Scenario:** You have a file `prompts.csv` containing 150 rows of basic math questions you want the LLM to solve.
 
-### 4. RAG Hallucination Testing
-*Testing the Faithfulness judge. Paste the Context into the RAG Context box.*
-*   **Context:** `Acme Corp reported $1.2M in Q3 revenue. The CEO is Jane Doe.`
-*   **Prompt:** `Who is the CEO of Acme Corp and what was their Q4 revenue?`
-*   **Expected Output:** `The CEO is Jane Doe. The provided context does not mention Q4 revenue.`
-*(If the LLM makes up a Q4 revenue number, the LLM-as-a-Judge will instantly flag it as a Hallucination and drop the score).*
+**Step-by-Step Execution:**
+1. **Prepare Data:** Ensure your CSV has two columns: `prompt` and `expected_output`.
+2. **Upload:** Drag and drop `prompts.csv` into the dashed upload area on the Dataset Tab.
+3. **Configure:** Select your target model (e.g., `llama3`) and set your temperature.
+4. **Execute:** Click **Run Batch**. 
+**Result:** The system will process your file in parallel chunks (3 at a time). Once finished, it generates a comprehensive data table revealing the exact pass/fail rates. You can click the **Download PDF Report** to save these results instantly.
+
+### 3. The Matrix Tab (N × M Grid Testing)
+**Goal:** Figuring out which LLM model is the most cost-effective for a specific task.
+**Scenario:** You don't know if you need `llama3` (heavy/slow) or `phi3:mini` (fast/light) for a simple text categorization task.
+
+**Step-by-Step Execution:**
+1. **Input Prompts:** Paste 3 different ways to ask for categorization (one per line).
+2. **Select Competitors:** In the sidebar, check the boxes for both `llama3` and `phi3:mini`.
+3. **Run:** Click **Run Matrix**.
+**Result:** The engine will evaluate all 3 prompts against both models, generating a 2D Visual Heatmap. If `phi3` scores a 92 and completes it in 400ms, but `llama3` scores a 94 and completes it in 1800ms, the Matrix helps you confidently determine that `phi3` is vastly superior for production deployment due to latency savings!
+
+### 4. The Iterations Tab (Self-Healing Loop)
+**Goal:** Watching the AI fix your bad prompts automatically.
+**Scenario:** You wrote a terrible prompt: `Give me 3 colors.` The model responded with a chatty *"Certainly! Here are three beautiful colors you might enjoy: Red, Blue, and Green."*
+
+**Step-by-Step Execution:**
+1. **Identify Failure:** After running the bad prompt in the Evaluate tab, you will notice a low score and a failed format Assertion.
+2. **Trigger Healing:** Click the green **Improve Worst** button on that result card. 
+3. **Wait:** The LLM-Optimizer will analyze the failure, rewrite the prompt adding constraints, test it internally, and repeat until the score jumps.
+4. **View Lineage:** Open the **Iterations** tab.
+**Result:** You will see a beautiful Chart.js line graph mapped to your prompt's "Lineage." It will show your score climbing from 32/100 to 98/100. Below the graph, you will see the AI's rewritten masterpiece: `List exactly 3 colors format as comma-separated values. Provide absolutely no conversational text.`
+
+### 5. The Compare Tab (A/B Testing)
+**Goal:** Directly testing minor linguistic tweaks to measure deviation.
+**Scenario:** Testing if saying "You are" vs "Act as" changes hallucination rates.
+
+**Step-by-Step Execution:**
+1. **Prompt A:** Type: `You are a financial advisor...`
+2. **Prompt B:** Type: `Act as a senior financial advisor with 20 years experience...`
+3. **Run:** Hit **Compare**.
+**Result:** You receive a direct side-by-side printout highlighting the response deviation between the two linguistic frames, allowing you to fine-tune your persona.
+
+### 6. The History Tab
+**Goal:** Accountability, auditing, and deep metric review.
+
+**Step-by-Step Execution:**
+1. **Navigate:** Go to the History tab. You will see every evaluation you've ever run saved to local SQLite.
+2. **Inspect:** Click the **View** button on any historic run.
+**Result:** A massive detailed modal pops up showing the exact prompt used, what the LLM returned, what you expected, and the explicit scoring breakdown (BLEU, ROUGE, and LLM-Judge feedback).
+
+---
+
+## 💡 Example Prompts Library
+
+Here are several advanced prompt engineering templates you can copy-paste directly into the **Evaluate Tab**. These examples demonstrate how to "box in" the LLM to get exactly what you want.
+
+### 1. Zero-Shot Classification (The Baseline)
+**Concept:** Testing if the model already knows how to perform an abstraction without examples.
+**Prompt:** 
+> `Classify the sentiment of this review as exactly one of [Positive, Neutral, Negative]. Provide no other text.`
+> `Review: "The food was okay, but the service was terrible."`
+
+**Expected Output:** `Negative`
+
+### 2. Few-Shot Data Extraction (Pattern Matching)
+**Concept:** Giving the model examples to rigidly enforce output formatting, useful for data-mining tasks.
+**Prompt:** 
+> ```text
+> Extract the airport codes from the text.
+> Text: "I flew from Boston to New York." -> Output: BOS, JFK
+> Text: "The flight from London landed in Tokyo." -> Output: LHR, HND
+> Text: "We are traveling from San Francisco to Paris." -> Output:
+> ```
+
+**Expected Output:** `SFO, CDG`
+
+### 3. Chain-of-Thought (Mathematical Reasoning)
+**Concept:** Forcing the model to "think" step-by-step before answering. This has been proven to significantly improve logical accuracy on zero-shot tasks.
+**Prompt:** 
+> `A farmer has 15 sheep. All but 8 die. How many are left?`
+> `Think step-by-step recursively, then provide the final number at the very end wrapped in brackets like [8].`
+
+**Expected Output:** `[8]` *(Note: The LLM will output a paragraph of its internal reasoning, but the Expected Output scoring focuses on the final bracketed number being present).*
+
+### 4. Role-Based Negative Constraint Testing
+**Concept:** Testing if the model can adopt a persona and adhere to a strict *negative constraint* (explicitly telling the AI what it is NOT allowed to do).
+**Prompt:** 
+> `You are a strict, emotionless Python code generator.`
+> `Write a function to reverse a string in Python.`
+> `NEGATIVE CONSTRAINT: Do NOT provide any explanations, greetings, or conversational filler. Return ONLY the raw python code blocks.`
+
+**Expected Output:** 
+> ```python
+> def reverse_string(s):
+>     return s[::-1]
+> ```
+
+### 5. RAG Hallucination Testing (Faithfulness)
+**Concept:** Testing the actual *Faithfulness Evaluator Judge*. Paste the Context into the separate RAG Context box on the UI, and the prompt into the main box.
+**RAG Context Box:** 
+> `Acme Corp reported $1.2M in Q3 revenue. The CEO is Jane Doe.`
+
+**Prompt Box:** 
+> `Who is the CEO of Acme Corp and what was their Q4 revenue?`
+
+**Expected Output:** 
+> `The CEO is Jane Doe. The provided context does not mention Q4 revenue.`
+
+*(If the LLM makes up a fake Q4 revenue number like "$1.5M", the internal LLM-as-a-Judge will instantly flag it as a Hallucination and severely drop the Faithfulness score!)*
