@@ -1,0 +1,74 @@
+prompt,expected_output,category,difficulty
+"What is the capital of France?","The capital of France is Paris.",Factual,Easy
+"What is the capital of Japan?","The capital of Japan is Tokyo.",Factual,Easy
+"What is the capital of Australia?","The capital of Australia is Canberra.",Factual,Easy
+"What is the capital of Brazil?","The capital of Brazil is Brasília.",Factual,Easy
+"What is the capital of Canada?","The capital of Canada is Ottawa.",Factual,Easy
+"What is the square root of 144?","The square root of 144 is 12.",Math,Easy
+"What is 25 multiplied by 4?","25 multiplied by 4 is 100.",Math,Easy
+"What is 15% of 200?","15% of 200 is 30.",Math,Easy
+"Solve: 3x + 7 = 22. What is x?","x = 5. Subtracting 7 from both sides gives 3x = 15, and dividing by 3 gives x = 5.",Math,Medium
+"What is the derivative of x^3 + 2x?","The derivative of x^3 + 2x is 3x^2 + 2.",Math,Medium
+"Explain what photosynthesis is in one sentence.","Photosynthesis is the process by which green plants convert sunlight, water, and carbon dioxide into glucose and oxygen.",Science,Easy
+"What is Newton's second law of motion?","Newton's second law states that force equals mass times acceleration (F = ma).",Science,Easy
+"What is the chemical formula for water?","The chemical formula for water is H2O, consisting of two hydrogen atoms and one oxygen atom.",Science,Easy
+"What is DNA and what does it do?","DNA (deoxyribonucleic acid) is a molecule that carries the genetic instructions for the development, functioning, growth, and reproduction of all known organisms.",Science,Medium
+"Explain the theory of relativity in simple terms.","Einstein's theory of relativity states that the laws of physics are the same for all observers, and that the speed of light is constant regardless of the observer's motion. It also shows that energy and mass are interchangeable (E=mc²).",Science,Hard
+"Translate 'Hello, how are you?' to Spanish.","Hola, ¿cómo estás?",Language,Easy
+"Translate 'Good morning' to French.","Bonjour.",Language,Easy
+"Translate 'Thank you very much' to Japanese.","どうもありがとうございます (Dōmo arigatō gozaimasu).",Language,Easy
+"Translate 'Where is the library?' to German.","Wo ist die Bibliothek?",Language,Easy
+"Translate 'I love programming' to Italian.","Amo la programmazione.",Language,Medium
+"Write a Python function to check if a number is prime.","def is_prime(n):
+    if n < 2:
+        return False
+    for i in range(2, int(n**0.5) + 1):
+        if n % i == 0:
+            return False
+    return True",Coding,Medium
+"Write a Python function to reverse a string.","def reverse_string(s):
+    return s[::-1]",Coding,Easy
+"Write a Python function to find the factorial of a number.","def factorial(n):
+    if n == 0 or n == 1:
+        return 1
+    return n * factorial(n - 1)",Coding,Easy
+"Write a Python function to check if a string is a palindrome.","def is_palindrome(s):
+    s = s.lower().replace(' ', '')
+    return s == s[::-1]",Coding,Easy
+"Write a Python function that returns the Fibonacci sequence up to n terms.","def fibonacci(n):
+    sequence = []
+    a, b = 0, 1
+    for _ in range(n):
+        sequence.append(a)
+        a, b = b, a + b
+    return sequence",Coding,Medium
+"Summarize the concept of machine learning in 2-3 sentences.","Machine learning is a subset of artificial intelligence where computers learn patterns from data without being explicitly programmed. It uses algorithms that improve their performance over time as they are exposed to more data. Common types include supervised, unsupervised, and reinforcement learning.",Summarization,Medium
+"Summarize what blockchain technology is.","Blockchain is a decentralized, distributed digital ledger that records transactions across many computers. Each block contains a cryptographic hash of the previous block, making the chain tamper-resistant. It is the underlying technology behind cryptocurrencies like Bitcoin.",Summarization,Medium
+"Summarize the water cycle in 2 sentences.","The water cycle describes the continuous movement of water on, above, and below the surface of the Earth. Water evaporates from oceans and lakes, forms clouds through condensation, falls as precipitation, and flows back to water bodies through runoff.",Summarization,Easy
+"What are the three states of matter?","The three states of matter are solid, liquid, and gas. In a solid, particles are tightly packed; in a liquid, they flow freely; and in a gas, they move rapidly and spread out.",Science,Easy
+"Who wrote Romeo and Juliet?","Romeo and Juliet was written by William Shakespeare.",Factual,Easy
+"What year did World War II end?","World War II ended in 1945.",Factual,Easy
+"Who painted the Mona Lisa?","The Mona Lisa was painted by Leonardo da Vinci.",Factual,Easy
+"What is the largest planet in our solar system?","The largest planet in our solar system is Jupiter.",Factual,Easy
+"What is the speed of light?","The speed of light in a vacuum is approximately 299,792,458 meters per second (about 3 x 10^8 m/s).",Science,Easy
+"Explain what an API is to a non-technical person.","An API (Application Programming Interface) is like a waiter in a restaurant. You (the user) tell the waiter (API) what you want, the waiter takes your order to the kitchen (server), and brings back your food (data). It lets different software applications talk to each other.",Explanation,Medium
+"What is the difference between HTTP and HTTPS?","HTTP (HyperText Transfer Protocol) transmits data in plain text, while HTTPS (HTTP Secure) encrypts the data using SSL/TLS, making communication more secure. HTTPS is essential for protecting sensitive information like passwords and credit card numbers.",Technical,Medium
+"Explain the difference between a list and a tuple in Python.","A list is mutable (can be changed after creation) and uses square brackets [], while a tuple is immutable (cannot be changed) and uses parentheses (). Tuples are faster and used for fixed collections of items.",Coding,Easy
+"What is a neural network?","A neural network is a computing system inspired by the biological neural networks in the human brain. It consists of layers of interconnected nodes (neurons) that process information, learn patterns from data, and can make predictions or decisions.",Technical,Medium
+"List 5 programming languages and their primary use cases.","1. Python - Data science, AI, web development. 2. JavaScript - Web development, front-end and back-end. 3. Java - Enterprise applications, Android development. 4. C++ - Game development, system programming. 5. SQL - Database querying and management.",Technical,Easy
+"What is the Big O notation and why is it important?","Big O notation describes the upper bound of an algorithm's time or space complexity as input size grows. It helps developers analyze and compare algorithm efficiency, ensuring scalable and performant code. Common complexities include O(1), O(n), O(log n), and O(n²).",Technical,Hard
+"Explain recursion with a simple example.","Recursion is when a function calls itself to solve a smaller version of the same problem. For example, calculating factorial: factorial(5) = 5 * factorial(4) = 5 * 4 * factorial(3), and so on until reaching the base case factorial(1) = 1.",Explanation,Medium
+"What is the greenhouse effect?","The greenhouse effect is a natural process where certain gases in Earth's atmosphere (like CO2 and methane) trap heat from the sun, warming the planet's surface. Without it, Earth would be too cold to support life. However, excess greenhouse gases from human activity amplify this effect, causing global warming.",Science,Medium
+"Explain the concept of supply and demand.","Supply and demand is a fundamental economic principle. When demand for a product increases and supply stays the same, prices rise. When supply increases and demand stays the same, prices fall. The point where supply equals demand is called the equilibrium price.",Explanation,Medium
+"What is encryption and why is it important?","Encryption is the process of converting readable data (plaintext) into an unreadable format (ciphertext) using algorithms and keys. It is essential for protecting sensitive information during transmission and storage, preventing unauthorized access to personal data, financial records, and communications.",Technical,Medium
+"Write a haiku about programming.","Code flows line by line,
+Bugs hide in the silent loops,
+Debug finds the light.",Creative,Medium
+"Write a short poem about the ocean.","Beneath the endless blue so wide,
+Where waves and whispers gently glide,
+The ocean holds its ancient song,
+A timeless dance that flows along.",Creative,Medium
+"What are the SOLID principles in software engineering?","SOLID is an acronym for five design principles: Single Responsibility (a class should have one job), Open/Closed (open for extension, closed for modification), Liskov Substitution (subtypes must be substitutable), Interface Segregation (prefer small interfaces), and Dependency Inversion (depend on abstractions, not concretions).",Technical,Hard
+"What is the difference between SQL and NoSQL databases?","SQL databases are relational, use structured schemas and tables, and support complex queries (e.g., PostgreSQL, MySQL). NoSQL databases are non-relational, offer flexible schemas, and handle unstructured data well (e.g., MongoDB, Redis). SQL is ideal for structured data; NoSQL excels at scalability and flexibility.",Technical,Medium
+"Explain what a REST API is.","A REST (Representational State Transfer) API is an architectural style for building web services. It uses standard HTTP methods (GET, POST, PUT, DELETE) to perform operations on resources identified by URLs. REST APIs are stateless, meaning each request contains all the information needed to process it.",Technical,Medium
+"What is cloud computing?","Cloud computing is the delivery of computing services (servers, storage, databases, networking, software) over the internet. Instead of owning physical infrastructure, users can rent resources on-demand from providers like AWS, Google Cloud, or Azure, paying only for what they use.",Technical,Easy

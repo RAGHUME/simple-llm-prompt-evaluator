@@ -1,0 +1,7 @@
+prompt,expected_output,category,difficulty
+"If John has 3 apples and gives 1 to Mary, how many does he have?","John has 2 apples.",Math,Easy
+"What is the next number in the sequence: 2, 4, 8, 16?","The next number is 32.",Math,Medium
+"How many letters are in the word 'Mississippi'?","There are 11 letters in the word 'Mississippi'.",Logic,Medium
+"Solve: 5 + 2 * 3.","The answer is 11. According to the order of operations, multiply first (2*3=6) then add (5+6=11).",Math,Medium
+"If you are running a race and pass the person in 2nd place, what place are you in?","You are in 2nd place.",Logic,Hard
+"What is heavier: a ton of bricks or a ton of feathers?","They weigh the same; both are a ton.",Logic,Easy

@@ -1,0 +1,6 @@
+prompt,expected_output,category,difficulty
+"Write a tagline for a coffee brand.","Fuel your morning, naturally.",Marketing,Easy
+"Summarize the benefits of cloud computing in one sentence.","Cloud computing provides scalable, cost-effective, and on-demand access to computing resources over the internet.",Business,Medium
+"Write a 10-word cold email open for a software product.","Boost your team's productivity with our new automation software today.",Sales,Hard
+"What does ROI stand for?","ROI stands for Return on Investment.",Business,Easy
+"Explain briefly why customer retention is important.","Customer retention costs less than acquisition, builds brand loyalty, and provides a stable foundation for long-term predictable revenue growth.",Marketing,Medium

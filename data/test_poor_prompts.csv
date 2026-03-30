@@ -1,0 +1,7 @@
+prompt,expected_output,category,difficulty
+"Explain cars.","Cars are four-wheeled motor vehicles used for transportation. They typically run on gasoline or electricity and have an engine.",Factual,Easy
+"Code something.","def example(): return 'Hello World'",Coding,Medium
+"Say a nice thing.","You are a wonderful and capable person who can achieve great things.",Creative,Easy
+"Tell me about gravity.","Gravity is a fundamental force that attracts objects with mass towards each other.",Science,Medium
+"Write a poem.","Roses are red, violets are blue, this is a very short poem for you.",Creative,Easy
+"Gimme a summary of WW2.","World War II was a global conflict from 1939 to 1945 involving most of the world's nations, split between the Allies and Axis powers.",History,Medium
