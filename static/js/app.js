@@ -5,6 +5,21 @@
  * All data is fetched from /api/* endpoints — zero hardcoded mock data.
  */
 
+// ── Global Fetch Override for ngrok ──
+const originalFetch = window.fetch;
+window.fetch = async function () {
+    const resource = arguments[0];
+    let config = arguments[1];
+    if (!config) config = {};
+    if (!config.headers) config.headers = {};
+    if (config.headers instanceof Headers) {
+        config.headers.append('ngrok-skip-browser-warning', 'true');
+    } else {
+        config.headers['ngrok-skip-browser-warning'] = 'true';
+    }
+    return originalFetch(resource, config);
+};
+
 // ── Global State ──
 let selectedModel = 'phi3:mini';
 let useJudge = false;
