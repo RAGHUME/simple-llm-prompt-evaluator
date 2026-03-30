@@ -10,6 +10,8 @@
 
 <br/>
 
+> **🔗 Live Demo:** Currently accessible via [Ngrok Tunnel](https://unequilateral-upbraidingly-rena.ngrok-free.dev) (Deployed locally).
+
 > **Stop guessing which prompt works best.** Connect locally to Ollama and systematically grade prompt engineering variations to scientifically determine which prompts produce the absolute best outputs.
 
 This framework moves beyond basic "eye-test" checks by providing **LLM-as-a-Judge RAG heuristics**, deterministic **mathematical assertions**, semantic similarity vectorization, and **prompt optimization lineage tracking**.
