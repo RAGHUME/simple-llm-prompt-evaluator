@@ -24,68 +24,65 @@ We completely stripped out the old Streamlit framework and replaced it with a cu
 
 ---
 
-## 🚀 How to Run the Project
+## 🎓 Step-by-Step UI Application Guide
 
-Running the project is now fully automated.
-
-1. Keep **Ollama** running in the background (`ollama serve`).
-2. Open a terminal in the root project folder.
-3. Execute `.\start.bat` (Windows).
-
-*The `start.bat` script is intelligent: It will automatically find your `venv`, activate it, verify all PIP dependencies are installed, make sure Ollama is responding on Port 11434, and then finally boot the server to `http://localhost:8000`.*
-
----
-
-## 📑 Detailed Tab Examples & Usage Guide
-
-Below is a walkthrough of every tab in the system and exactly how to use them with real examples.
+Here is exactly how to navigate each tab of the dashboard to optimize your prompts like a professional AI Engineer.
 
 ### 1. The Evaluate Tab (Single & Variant Testing)
-**Purpose:** Testing a core idea across different "styles" of prompting to see which the model responds best to.
-**Example Scenario:** You are building an app that summarizes medical emails into JSON.
-*   **Context (RAG):** *Paste an example patient support email here.*
-*   **Prompt (Zero-Shot):** `Summarize the following email into JSON.`
-*   **Prompt (Few-Shot):** `Summarize the email into JSON. Example: {"urgency": "high", "topic": "billing"}`
-*   **Expected Output:** `{"urgency": "low", "topic": "appointment"}`
-*   **Action:** Hit **Evaluate**. The system will run both prompts at the same time. You will instantly see which strategy resulted in a better, more accurate JSON string.
+**Goal:** Test your core idea against different "styles" of prompting to see which the model responds best to.
 
-### 2. The Dataset Tab (Batch Processing)
-**Purpose:** Running massive files (CSV) through the evaluator without locking up your browser.
-**Example Scenario:** You have a file `prompts.csv` containing 150 rows of basic math questions you want the LLM to solve.
-*   **Action:** Drag and drop `prompts.csv` into the dashed box. Select `llama3`. Click **Run Batch**.
-*   **Magic:** The system will process them in chunks of 5 using background thread pools. You will get a final table revealing that 82% of the prompts passed, with a button to instantly download the results PDF.
+*   **Step 1:** In the **Prompt** box, paste your baseline instruction. *(Example: `Extract the flight details into JSON.`)*
+*   **Step 2:** In the **Context (RAG)** box, paste the actual email you are extracting from. *(Example: `"Your flight AA123 departs Boston at 5 PM."`)*
+*   **Step 3:** In the **Expected Output** box, write exactly what a perfect response looks like. *(Example: `{"flight": "AA123", "departure": "BOS"}`)*
+*   **Step 4 (Assertions):** Click "Add Rule" and select **Valid JSON**. This forces the evaluator to instantly flag the response as a failure if the LLM adds conversational text like *"Here is your JSON:"*.
+*   **Step 5:** Hit **Evaluate →**. 
+*   **Result:** You will instantly see your score (0 to 100) and receive a verbal critique from the AI Judge on why it succeeded or failed!
 
-### 3. The Matrix Tab (N × M Grid Testing)
-**Purpose:** Figuring out which LLM model is the most cost-effective for a specific task.
-**Example Scenario:** You don't know if you need `llama3` (heavy) or `phi3:mini` (fast/light) for a simple categorization task.
-*   **Prompts:** Paste 3 different ways to ask for categorization.
-*   **Models:** Check both `llama3` and `phi3:mini` in the sidebar.
-*   **Action:** Run Matrix. You will receive a 2D Heatmap. If `phi3` scores a 92 and completes it in 400ms, but `llama3` scores a 94 and completes it in 1800ms, the Matrix helps you realize `phi3` is vastly superior for production deployment due to the latency savings.
+### 2. The Iterations Tab (Self-Healing Loop)
+**Goal:** Watch the AI automatically fix a prompt that scored poorly.
 
-### 4. The Iterations Tab (Self-Healing Loop)
-**Purpose:** Watching the AI fix your bad prompts.
-**Example Scenario:** In the Evaluate tab, you wrote a terrible prompt: `Give me 3 colors.` The model responded with a chatty *"Certainly! Here are three beautiful colors you might enjoy: Red, Blue, and Green."* It failed your format assertions.
-*   **Action:** Click the green **Improve Worst** button on the result card. 
-*   **Magic:** Wait 15 seconds. Then, open the **Iterations** tab.
-*   **Result:** You will see a Chart.js line graph showing your score jump from 32/100 to 98/100. Below it, you will see the AI's rewritten prompt: `List exactly 3 colors format as comma-separated values. Provide absolutely no conversational text or introductory remarks.`
+*   **Step 1:** Go back to your Evaluate Tab result card for the prompt you just ran.
+*   **Step 2:** If it scored under an 80%, click the green **Improve Worst** button. 
+*   **Step 3:** The LLM Optimizer will spin up in the background. Wait about 15 seconds.
+*   **Step 4:** Navigate to the **Iterations** tab on the sidebar.
+*   **Result:** You will see a beautiful `Chart.js` line graph showing exactly how your score jumped from 32/100 to 98/100 across 3 attempts. Below it, the AI will hand you the *perfected* prompt: `Extract the flight details strictly into a JSON dictionary with no markdown formatting. Do not output anything else but the code.`
+
+### 3. The Dataset Tab (Batch Processing)
+**Goal:** Run massive spreadsheets (CSV) of prompts through the evaluator without locking up your browser.
+
+*   **Step 1:** Prepare a `.csv` file with two headers: `prompt` and `expected_output`.
+*   **Step 2:** Drag and drop your `prompts.csv` explicitly into the dashed box on the dataset page. 
+*   **Step 3:** Select your fastest model (like `phi3:mini`) and click **Run Batch**.
+*   **Result:** The system will process them concurrently in chunks of 5 using background thread pools. You will get a final table revealing that perhaps 82% of the prompts passed, with a button to instantly **Download PDF** of the results!
+
+### 4. The Matrix Tab (N × M Grid Testing)
+**Goal:** Figure out which LLM model is the most cost-effective for a specific task.
+
+*   **Step 1:** Paste 3 different ways to ask your question into the Prompt fields.
+*   **Step 2:** Check both `llama3` and `phi3:mini` in the Model selector sidebar.
+*   **Step 3:** Click **Run Matrix**. 
+*   **Result:** You will receive a 2D Heatmap. If `phi3` scores a 92/100 and completes it in 400ms, but `llama3` scores a 94/100 and completes it in 1800ms, the Matrix helps you realize `phi3` is vastly superior for production deployment due to the massive latency savings!
 
 ### 5. The Compare Tab (A/B Testing)
-**Purpose:** Directly testing minor linguistic tweaks.
-**Example Scenario:** Testing if saying "You are" vs "Act as" changes hallucination rates.
-*   **Prompt A:** `You are a financial advisor...`
-*   **Prompt B:** `Act as a senior financial advisor with 20 years experience...`
-*   **Action:** Hit Compare. You receive a direct side-by-side printout highlighting the response deviation between the two linguistic frames.
+**Goal:** Directly test minor linguistic variations against each other.
 
-### 6. The History Tab
-**Purpose:** Accountability, auditing, and PDF reporting.
-**Example Scenario:** Your manager wants to know why you chose `phi3:mini` over `llama3`.
-*   **Action:** Go to the History tab. You will see every evaluation you've ever run. Click **View** on the specific run to pull up the detailed analysis popup. Prove your choice with hard metrics, then click **Download PDF** to export a professional, pre-formatted report to share with stakeholder management.
+*   **Step 1:** Paste **Prompt A:** `You are a financial advisor...`
+*   **Step 2:** Paste **Prompt B:** `Act as a senior financial advisor with 20 years experience...`
+*   **Step 3:** Hit Compare. 
+*   **Result:** You receive a direct side-by-side printout highlighting the response deviation between the two linguistic frames. Use this to determine if adding aggressive persona constraints lowers the model's hallucination rates.
+
+### 6. The History Tab (Auditing)
+**Goal:** Export and audit every evaluation you've ever run.
+
+*   **Step 1:** Go to the **History** tab. You will see every evaluation chronologically.
+*   **Step 2:** Your manager wants to know why you chose a specific prompt. Click the **View** button on a specific run.
+*   **Result:** A detailed analysis popup modal will appear, proving your choice with hard metrics. You can close this and click **Download PDF** to export a professional, pre-formatted report directly to your manager.
 
 ---
 
-## 💡 Example Prompts Library
+## 💡 Prompt Engineering Library 
 
-Here are several prompt testing examples you can copy-paste directly into the **Evaluate Tab** to see how your local LLM reacts to different engineering strategies.
+Here are several prompt testing examples you can copy-paste directly into the **Evaluate Tab**.
 
 ### 1. Zero-Shot Testing (The Baseline)
 *Testing if the model already knows how to perform an abstraction without examples.*
@@ -103,13 +100,8 @@ Here are several prompt testing examples you can copy-paste directly into the **
     ```
 *   **Expected Output:** `SFO, CDG`
 
-### 3. Chain-of-Thought (Reasoning)
-*Forcing the model to "think" step-by-step before answering to improve logical accuracy.*
-*   **Prompt:** `A farmer has 15 sheep. All but 8 die. How many are left? Think step-by-step, then provide the final number at the very end.`
-*   **Expected Output:** `8` *(Note: The LLM will output its reasoning, but the Expected Output focuses on the final correct number being present).*
-
-### 4. Role-Based Constraint Testing
-*Testing if the model can adopt a persona and adhere to a strict negative constraint (something it is NOT allowed to do).*
+### 3. Constraint Testing 
+*Testing if the model can adhere to a strict negative constraint.*
 *   **Prompt:** `You are a strict Python code generator. Write a function to reverse a string. Do NOT provide any explanations, greetings, or markdown formatting. Return ONLY the raw python code.`
 *   **Expected Output:** 
     ```python
@@ -117,7 +109,7 @@ Here are several prompt testing examples you can copy-paste directly into the **
         return s[::-1]
     ```
 
-### 5. RAG Hallucination Testing
+### 4. RAG Hallucination Testing
 *Testing the Faithfulness judge. Paste the Context into the RAG Context box.*
 *   **Context:** `Acme Corp reported $1.2M in Q3 revenue. The CEO is Jane Doe.`
 *   **Prompt:** `Who is the CEO of Acme Corp and what was their Q4 revenue?`

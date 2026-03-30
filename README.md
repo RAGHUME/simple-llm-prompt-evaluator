@@ -1,277 +1,114 @@
-# 🚀 LLM Prompt Evaluator (v3.0)
+<div align="center">
 
-A high-performance, production-grade LLM evaluation framework. Connect locally to Ollama and systematically grade prompt engineering variations to scientifically determine which prompts produce the best outputs.
+# 🧠 Simple LLM Prompt Evaluator (v3.0)
 
-This framework moves beyond basic "eye-test" checks by providing LLM-as-a-Judge RAG heuristics, deterministic mathematical assertions, semantic comparisons, and prompt optimization lineage tracking.
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/release/python-390/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
+[![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-black?style=flat&logo=ollama)](https://ollama.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
----
+**A high-performance, production-grade LLM evaluation and auto-optimization framework.**
 
-## 🌟 Key Features
+Connect locally to an Ollama server and systematically grade prompt engineering variations to mathematically determine which prompts produce the absolute best outputs.
 
-| Feature | Description |
-|---------|-------------|
-| ⚡ **Concurrent Prompt Engine** | Evaluate multiple prompt strategies simultaneously using async processing |
-| 🛡️ **Assertion Rule Testing** | Deterministic pass/fail rules: `Must contain`, `Regex match`, `Max words`, `Valid JSON` |
-| 📊 **Multi-Model Matrix Grid** | Test N-prompts × M-models in a visual heatmap grid |
-| 📚 **RAG Metrics** | Faithfulness & Answer Relevance scoring via LLM-as-Judge |
-| 🗃️ **CSV Dataset Mode** | Upload `.csv` files for batch evaluation of hundreds of prompts |
-| 📈 **Iteration / Lineage Tracking** | Track optimization history with Chart.js visualizations |
-| 🔄 **Auto-Optimization** | Automatically rewrite low-scoring prompts using LLM feedback |
-| 📋 **PDF Reports** | Download professional evaluation reports |
-| 🎨 **Premium Dashboard** | Dark-first glassmorphism UI with light mode toggle |
+[Features](#-key-features) • [Installation](#-quickstart-guide) • [Recommended Models](#-recommended-local-models) • [Architecture](#-architecture)
+
+</div>
 
 ---
 
-## 🛠️ Prerequisites
+> Stop relying on the "eye-test" to see if your AI prompts are working. This framework brings **deterministic assertions**, **RAG Faithfulness judges**, and **semantic baseline testing** to local, open-source models. 
 
-Before running this project you need:
+## 🌟 Why is this unique?
+Most prompt testing tools are simply chat-boxes. **This project is a scientific evaluation engine.** 
+If a prompt fails to meet your expected output or violates strict length/format rules, the system doesn't just log it—**it automatically rewrites the prompt**, tests it again, and plots its learning curve on a lineage graph.
 
-1. **Python 3.9+** — [Download Python](https://python.org/downloads)
-2. **Ollama** — [Download Ollama](https://ollama.com/download)
-3. **At least one Ollama model** — e.g., `phi3:mini`
+### ⚡ Highlight Features
+*   **Concurrent Execution:** Test up to 3 prompts simultaneously using asynchronous multi-threading.
+*   **LLM-as-a-Judge:** AI doesn't just grade itself blindly; the system instructs the model to critique its own hallucination rates.
+*   **Assertion Rules Engines:** Set strict `Regex`, `Max Words`, and `JSON Format` pass/fail bounds. 
+*   **Offline First:** Full ML semantic text similarity calculation (`sentence-transformers`) stored entirely in local memory with LRU caching. No external API keys required!
+*   **PDF Generation:** Instantly export A/B test reports to share with stakeholders.
+
+---
+
+## 🛠️ Quickstart Guide
+
+### Prerequisites
+1. **Python 3.9+** — [Download Here](https://python.org/downloads)
+2. **Ollama Engine** — [Download Here](https://ollama.com/download)
+
+### 1. Installation
+Clone the repository and install the dependencies:
+```bash
+git clone https://github.com/RAGHUME/simple-llm-prompt-evaluator.git
+cd simple-llm-prompt-evaluator
+
+# Create and activate a Virtual Environment
+python -m venv venv
+venv\Scripts\activate   # (On Mac/Linux: source venv/bin/activate)
+
+# Install required packages
+pip install -r requirements.txt
+```
+
+### 2. Start Local AI
+Open a **new terminal tab** and launch your Ollama engine, then pull down a small model:
+```bash
+ollama serve
+ollama pull phi3:mini
+```
+
+### 3. Launch the Server
+Go back to your original terminal and start the web framework:
+```bash
+# Windows users can simply double-click start.bat!
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+You can now access your dashboard at **http://localhost:8000**!
 
 ---
 
 ## 🤖 Recommended Local Models
 
-Because this project uses **LLM-as-a-Judge** to evaluate hallucinations and rewrite poor prompts automatically, performance relies heavily on how "smart" your local model is.
+Because this project uses the LLM to grade itself and rewrite prompts, performance relies heavily on how "smart" your local model is.
 
-| Model | Size | Best For | Start Command |
-|-------|------|----------|---------------|
-| **llama3** (or 3.1) | 8B | **Best Overall.** Excellent at prompt generation, strictly following formatting bounds, and understanding nuanced references. Needs 8GB+ RAM. | `ollama pull llama3` |
-| **phi3:mini** | 3.8B | **Fastest / Default.** Extremely fast inference for Batch/Matrix testing. Can run on almost any older hardware or laptop without dedicated GPUs. | `ollama pull phi3:mini` |
-| **qwen2.5:7b** | 7B | **Best Reasoner.** Currently dominating open-source charts for strictly following instructions and generating code (e.g. JSON/XML formats). | `ollama pull qwen2.5:7b` |
-| **mistral** | 7B | **Reliable Middleman.** A resilient, uncensored fallback model if Llama3 is too slow on your hardware. | `ollama pull mistral` |
+| Model | Size | Hardware | Best For | Start Command |
+|-------|------|----------|----------|---------------|
+| **llama3** | 8B | 8GB+ RAM | **Best Overall.** Understands nuanced formatting bounds perfectly. | `ollama pull llama3` |
+| **qwen2.5:7b** | 7B | 8GB+ RAM | **Best Reasoner.** Dominates at strictly generating raw code/JSON. | `ollama pull qwen2.5:7b` |
+| **phi3:mini**| 3.8B| 4GB+ RAM | **Fastest / Default.** Can run on any older hardware extremely fast. | `ollama pull phi3:mini` |
 
-> **Pro Tip:** Use the **Matrix Tab** in this application to evaluate the exact same prompt across `phi3:mini`, `llama3`, and `qwen2.5` simultaneously to mathematically prove which one handles your specific use-case best!
-
----
-
-## 🚀 How to Run
-
-### Step 1: Clone the Repository
-
-```bash
-git clone https://github.com/your-username/simple-llm-prompt-evaluator.git
-cd simple-llm-prompt-evaluator
-```
-
-### Step 2: Create a Virtual Environment (Recommended)
-
-**Windows (PowerShell/CMD):**
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
-
-**macOS/Linux:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-### Step 3: Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-> **Note:** The first install may take a few minutes as `sentence-transformers` downloads the embedding model (~90MB). This only happens once.
-
-### Step 4: Start Ollama
-
-Open a **separate terminal** and run:
-
-```bash
-ollama serve
-```
-
-Then pull at least one model:
-
-```bash
-ollama pull phi3:mini
-```
-
-Other recommended models:
-```bash
-ollama pull llama3
-ollama pull mistral
-```
-
-### Step 5: Start the Evaluator Server
-
-```bash
-python main.py
-```
-
-Or use uvicorn directly:
-
-```bash
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-**Windows shortcut:** Double-click `start.bat` — it checks everything and starts automatically.
-
-### Step 6: Open the Dashboard
-
-Open your browser and navigate to:
-
-| URL | Purpose |
-|-----|---------|
-| **http://localhost:8000** | Dashboard UI |
-| **http://localhost:8000/docs** | Interactive API Documentation (Swagger) |
+> 💡 **Pro Tip:** Use the *Matrix Tab* in the application to test the exact same prompt across all three of these models simultaneously to see which one perfectly handles your specific use-case!
 
 ---
 
-## 📖 Feature Guide
+## 🏗️ Architecture Stack
 
-### Evaluate Tab
-- Write your question and an optional reference/expected answer
-- Create multiple prompt variants with different strategies (Zero-Shot, Few-Shot, Chain-of-Thought, Role-Based)
-- Toggle **RAG Mode** to provide context documents for faithfulness scoring
-- Add **Assertion Rules** for pass/fail compliance checks
-- Click **Evaluate →** to run all variants concurrently
+This project is built for speed, migrating away from slow synchronous Python frameworks into modern web paradigms.
 
-### Iterations Tab
-- View optimization lineage history with interactive Chart.js graphs
-- Track how prompt scores improve across optimization attempts
-- Each optimization run creates a lineage with baseline → v2 → v3 progression
-- Data is populated automatically when you run **Improve worst** or **Optimize Failed Prompts**
-
-### Compare Tab
-- Paste multiple prompts (one per line) for direct side-by-side comparison
-- Perfect for A/B testing minor linguistic tweaks
-
-### Matrix Tab
-- Enter prompts and select 2+ models to build a cross-model evaluation grid
-- Visual heatmap shows which model handles which prompt best
-
-### Dataset Mode
-- Upload a CSV with `prompt` and `expected_output` columns
-- Run batch evaluation and optimize failing prompts automatically
-- Export results as CSV
-
-### History Tab
-- View all past evaluation runs with scores, similarity, and feedback
-- Click **View** on any entry to see the full prompt analysis details
-- Download PDF reports of your evaluation history
+- **Backend:** `FastAPI` (Python) over `uvicorn[standard]`
+- **ML Engine:** `sentence-transformers/all-MiniLM-L6-v2` with Custom MD5 Hashing 
+- **Frontend Controller:** Vanilla HTML5 + CSS3 + ES6 JavaScript (Sub-10ms DOM updates)
+- **Database Tracking:** Persistent `SQLite3` instance for tracking optimization iteration lineage.
 
 ---
 
-## 📁 Project Structure
+<details>
+<summary><strong>🔧 Click to view Troubleshooting FAQ</strong></summary>
 
-```
-simple-llm-prompt-evaluator/
-├── main.py                 # FastAPI backend — all API endpoints
-├── requirements.txt        # Python dependencies
-├── start.bat               # Windows startup script
-├── start.sh                # Linux/macOS startup script
-│
-├── src/                    # Backend modules
-│   ├── llm.py              # Ollama API communication
-│   ├── evaluator.py        # Core evaluation engine (similarity, length, judge)
-│   ├── optimizer.py         # Prompt optimization with retry/rollback
-│   ├── embeddings.py       # Sentence-transformers + LRU cache
-│   ├── metrics.py          # BLEU, ROUGE-1/2/L calculations
-│   ├── assertions.py       # Deterministic rule engine
-│   ├── rag_metrics.py      # RAG faithfulness & relevance judges
-│   ├── matrix.py           # Multi-model matrix evaluator
-│   ├── report.py           # PDF report generator
-│   ├── templates.py        # Prompt template library
-│   └── utils.py            # DB operations, logging, CSV helpers
-│
-├── static/                 # Frontend
-│   ├── index.html          # Main dashboard page
-│   ├── css/style.css       # Design system (dark/light themes)
-│   └── js/
-│       ├── app.js          # Frontend application logic
-│       └── chart.umd.js    # Chart.js (bundled for offline use)
-│
-├── db/                     # SQLite database (auto-created)
-│   └── results.db          # Evaluation history & lineage data
-│
-└── data/                   # Sample CSV datasets for testing
-    ├── prompts.csv
-    ├── test_business_marketing.csv
-    ├── test_math_logic.csv
-    └── test_poor_prompts.csv
-```
+**Error: Cannot connect to Ollama**
+Make sure Ollama is actually running in a separate terminal via `ollama serve`. 
+
+**Error: Port 8000 already in use**
+If you have another web server running, start the application on a new port:
+`uvicorn main:app --port 8080 --reload`
+
+**It's running slow the very first time!**
+The very first time you click "Evaluate", `sentence-transformers` automatically downloads a ~90MB ML model to your cache. This only happens once. Subsequent runs take seconds.
+</details>
 
 ---
-
-## 🏗️ Architecture
-
-- **Backend:** FastAPI (Python) with `asyncio` + `ThreadPoolExecutor` for concurrent LLM calls
-- **ML Engine:** `sentence-transformers` (all-MiniLM-L6-v2) with MD5-hashed LRU cache
-- **Frontend:** Vanilla HTML5 + CSS3 + ES6 JavaScript — no heavy frameworks, sub-10ms load
-- **Database:** SQLite (`db/results.db`) for evaluation history and optimization lineage tracking
-- **Charts:** Chart.js (bundled locally) for iteration/lineage visualization
-
----
-
-## 🔧 Troubleshooting
-
-### "Cannot connect to Ollama"
-```bash
-# Make sure Ollama is running in a separate terminal:
-ollama serve
-
-# Verify it's working:
-curl http://localhost:11434/api/tags
-```
-
-### "No models found"
-```bash
-# Pull at least one model:
-ollama pull phi3:mini
-```
-
-### "ModuleNotFoundError: No module named 'fastapi'"
-```bash
-# Install all dependencies:
-pip install -r requirements.txt
-
-# If using a virtual environment, make sure it's activated:
-# Windows: venv\Scripts\activate
-# Linux/Mac: source venv/bin/activate
-```
-
-### "sentence-transformers is slow to load"
-The first run downloads the embedding model (~90MB). Subsequent runs use the cached model and start in seconds. The model loads at startup via `preload_model()`.
-
-### Port 8000 already in use
-```bash
-# Use a different port:
-uvicorn main:app --port 8080
-# Then open http://localhost:8080
-```
-
----
-
-## 📊 API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/` | Serve dashboard UI |
-| `GET` | `/api/health` | Health check + Ollama status |
-| `GET` | `/api/models` | List available Ollama models |
-| `POST` | `/api/evaluate` | Evaluate prompt variants (concurrent) |
-| `POST` | `/api/evaluate/batch` | Batch evaluate from CSV dataset |
-| `POST` | `/api/evaluate/matrix` | Multi-model matrix evaluation |
-| `POST` | `/api/compare` | Compare multiple prompts |
-| `POST` | `/api/optimize` | Optimize a low-scoring prompt |
-| `POST` | `/api/optimize/batch` | Batch optimize failed prompts |
-| `GET` | `/api/history` | Get evaluation history |
-| `GET` | `/api/history/{id}` | Get single history entry details |
-| `POST` | `/api/history/clear` | Clear all history |
-| `GET` | `/api/iterations` | Get optimization lineage data |
-| `GET` | `/api/templates` | Get prompt templates |
-| `GET` | `/api/assertion-types` | Get assertion rule types |
-| `GET` | `/api/report/download` | Download PDF report |
-| `POST` | `/api/upload-csv` | Upload CSV for batch mode |
-
----
-
-## 📝 License
-
-MIT License. Feel free to fork and modify for your own internal pipeline testing!
+<div align="center">
+<i>Built with passion for prompt engineering. MIT License.</i>
+</div>
