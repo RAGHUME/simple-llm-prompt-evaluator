@@ -17,6 +17,9 @@
 > 2. You will see a standard warning screen from Ngrok (this is normal for free tunnels).
 > 3. Click the **"Visit Site"** button on that screen.
 > 4. The application dashboard will load directly from my local machine! Feel free to run prompt evaluations to see it in action.
+> 
+> 🛑 **Note for Developer (How to fix `ERR_NGROK_8012` `undefined://undefined`):** 
+> If you see this error, it means Ngrok is running but not correctly pointing to the local server. To fix this, stop your current Ngrok terminal and run exactly this command: `ngrok http 8000`. Make sure the FastAPI server is also running (`python main.py`).
 
 > **Stop guessing which prompt works best.** Connect locally to Ollama and systematically grade prompt engineering variations to scientifically determine which prompts produce the absolute best outputs.
 
