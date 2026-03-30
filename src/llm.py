@@ -9,12 +9,15 @@ Handles all communication with the local Ollama API.
 
 import requests
 import time
+import os
 from src.utils import get_logger
 
 logger = get_logger(__name__)
 
-OLLAMA_API_URL = "http://localhost:11434/api/generate"
-OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"
+# Allow overriding the local Ollama URL via Render Environment Variables for Hybrid deployments
+BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_API_URL = f"{BASE_URL}/api/generate"
+OLLAMA_TAGS_URL = f"{BASE_URL}/api/tags"
 
 # TTL-based cache for model listing (refreshes every 30s)
 _models_cache = {"models": [], "timestamp": 0, "ttl": 30}
