@@ -1,0 +1,19 @@
+# Core Framework
+fastapi
+uvicorn[standard]
+python-multipart
+
+# LLM & NLP
+requests
+sentence-transformers
+scikit-learn
+
+# Data Processing
+pandas
+
+# PDF Reporting
+fpdf2
+matplotlib
+
+# Templating
+jinja2
