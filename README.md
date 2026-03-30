@@ -10,7 +10,7 @@
 
 <br/>
 
-> **🔗 Live Demo:** Currently accessible via [Ngrok Tunnel](https://unequilateral-upbraidingly-rena.ngrok-free.dev) (Deployed locally).
+> **🔗 Live Demo:** Currently accessible via (https://unequilateral-upbraidingly-rena.ngrok-free.dev) (Deployed locally).
 
 > **Stop guessing which prompt works best.** Connect locally to Ollama and systematically grade prompt engineering variations to scientifically determine which prompts produce the absolute best outputs.
 
