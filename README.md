@@ -10,7 +10,7 @@
 
 <br/>
 
-> **🔗 Live Demo:** Use your current ngrok URL (free ngrok links can expire/change).
+> **🔗 Live Demo:** Currently accessible via (https://unequilateral-upbraidingly-rena.ngrok-free.dev) (Deployed locally).
 > 
 > **How to Access the Live Demo:**
 > 1. Click the Ngrok Tunnel link above.
