@@ -69,10 +69,20 @@ Because this project uses **LLM-as-a-Judge** to evaluate hallucinations and rewr
 
 ## 🚀 How to Run
 
+### Choose your run path
+
+| Use case | Best method | Command |
+|---|---|---|
+| Local development/testing | Standard run | `python main.py` |
+| Local dev with auto-reload | Uvicorn dev mode | `uvicorn main:app --host 0.0.0.0 --port 8000 --reload` |
+| Windows local stable launch | Script | `start.bat` |
+| Windows public sharing (ngrok) | One-click share script | `start-share.bat` |
+| Linux/macOS local stable launch | Script | `./start.sh` |
+
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/simple-llm-prompt-evaluator.git
+git clone https://github.com/RAGHUME/simple-llm-prompt-evaluator.git
 cd simple-llm-prompt-evaluator
 ```
 
@@ -141,6 +151,20 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 - `start.bat` → local stable run (`http://localhost:8000`)
 - `start-share.bat` → stable public sharing (starts API + ngrok and prints tunnel URL)
 
+### Step 5.1: Fastest way to run (Windows)
+
+Local only:
+
+```bash
+start.bat
+```
+
+Share publicly via ngrok:
+
+```bash
+start-share.bat
+```
+
 ### Step 6: Open the Dashboard
 
 Open your browser and navigate to:
@@ -182,6 +206,38 @@ If you get `ERR_NGROK_8012`:
 2. Restart only ngrok: `ngrok http 8000`
 3. Do **not** run server with `--reload` during public demo
 4. If tunnel URL changed, update the README demo link
+
+### How the ngrok link works (important)
+
+Your ngrok URL (for example `https://your-subdomain.ngrok-free.dev`) is only a live tunnel to your local machine.
+It will open your project **only while these are running on your PC**:
+
+1. Ollama (if you use model features): `ollama serve`
+2. API server on port `8000` (stable mode, no reload):
+   - `python main.py` (default stable mode in this project), or
+   - `uvicorn main:app --host 0.0.0.0 --port 8000`
+3. ngrok tunnel targeting the same port:
+   - `ngrok http 8000`
+
+If any one of the above stops, the public link will stop working.
+
+#### What visitors may see
+
+- On free ngrok, visitors may first see a warning page and must click **Visit Site** once.
+- If they see `ERR_NGROK_8012` or 404, the tunnel is usually down/rotated or mapped to a wrong port.
+
+#### Quick recovery checklist
+
+```bash
+# 1) Local API check
+curl http://127.0.0.1:8000/api/health
+
+# 2) Restart tunnel if needed
+ngrok http 8000
+```
+
+- If ngrok prints a new URL, update your README/demo link.
+- Keep your machine awake and online while sharing.
 
 ### Step 8 (Windows): One-click share
 
