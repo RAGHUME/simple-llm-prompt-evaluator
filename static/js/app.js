@@ -30,9 +30,19 @@ let datasetPrompts = [];
 let promptCount = 0;
 let assertions = [];
 let loadingTimerHandle = null;
+let etaRequestId = 0;
 
 const STRATEGIES = ['zero-shot', 'few-shot', 'chain-of-thought', 'role-based'];
 const STRAT_TAGS = ['tag-zs', 'tag-fs', 'tag-cot', 'tag-rb'];
+const MODEL_SEC_PER_PROMPT = {
+    'phi3:mini': 2.0,
+    'phi3': 2.2,
+    'llama3': 4.8,
+    'mistral': 3.8,
+    'mistral:7b': 4.0,
+    'gemma:2b': 2.5,
+    'gemma:7b': 4.6
+};
 
 
 // ═══════════════════════════════════
@@ -70,6 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupDragDrop();
     addPrompt();
     await fetchModels();
+    updateEstimatedTime();
     fetchHistory();
     fetchIterations(false);
 });
@@ -183,7 +194,10 @@ function fmtScore(val, max = 100) {
 
 function setupJudgeToggle() {
     const toggle = document.getElementById('judge-toggle');
-    if (toggle) toggle.addEventListener('change', (e) => { useJudge = e.target.checked; });
+    if (toggle) toggle.addEventListener('change', (e) => {
+        useJudge = e.target.checked;
+        updateEstimatedTime();
+    });
 }
 
 function setupRagToggle() {
@@ -193,6 +207,7 @@ function setupRagToggle() {
             useRag = e.target.checked;
             const wrap = document.getElementById('rag-context-wrap');
             if (wrap) wrap.style.display = useRag ? '' : 'none';
+            updateEstimatedTime();
         });
     }
 }
@@ -311,6 +326,7 @@ function selectTab(el) {
     el.closest('.model-tabs').querySelectorAll('.model-tab').forEach(t => t.classList.remove('active'));
     el.classList.add('active');
     selectedModel = el.dataset.model;
+    updateEstimatedTime();
 }
 
 
@@ -335,11 +351,15 @@ function addPrompt() {
       <div class="quality-hint"><span class="hint-dot" style="background:var(--text-muted)"></span><span style="color:var(--text-muted);font-size:11px">Type to check quality…</span></div>
     `;
     document.getElementById('prompt-list').appendChild(div);
+    updateEstimatedTime();
 }
 
 function removePrompt(btn) {
     const wrap = btn.closest('.prompt-wrap');
-    if (document.querySelectorAll('.prompt-wrap').length > 1) wrap.remove();
+    if (document.querySelectorAll('.prompt-wrap').length > 1) {
+        wrap.remove();
+        updateEstimatedTime();
+    }
 }
 
 function checkQuality(el) {
@@ -398,6 +418,55 @@ function clearEvaluateAll() {
     assertions = [];
     renderAssertions();
     addPrompt();
+    updateEstimatedTime();
+}
+
+function formatEstimate(seconds) {
+    if (seconds < 60) return `~${Math.max(1, Math.round(seconds))}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    return secs > 0 ? `~${mins}m ${secs}s` : `~${mins}m`;
+}
+
+function updateEstimatedTime() {
+    updateEstimatedTimeFromApi();
+}
+
+async function updateEstimatedTimeFromApi() {
+    const el = document.getElementById('evaluate-time-estimate');
+    if (!el) return;
+
+    const variantCount = document.querySelectorAll('.prompt-wrap textarea').length || 1;
+    const requestId = ++etaRequestId;
+
+    try {
+        const res = await fetch('/api/eta', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                operation: 'evaluate',
+                model: selectedModel,
+                prompt_count: variantCount,
+                use_judge: useJudge,
+                use_rag: useRag
+            })
+        });
+
+        if (!res.ok) throw new Error('ETA request failed');
+        const eta = await res.json();
+
+        // Ignore stale async responses.
+        if (requestId !== etaRequestId) return;
+
+        const src = eta.uses_runtime_samples ? 'learned' : 'default';
+        el.textContent = `Estimated analysis time: ${formatEstimate(eta.estimated_seconds)} (${variantCount} prompt${variantCount > 1 ? 's' : ''}, ${src})`;
+    } catch (_) {
+        const secPerPrompt = MODEL_SEC_PER_PROMPT[selectedModel] || 3.0;
+        const judgeMultiplier = useJudge ? 1.35 : 1;
+        const ragMultiplier = useRag ? 1.2 : 1;
+        const estimatedSeconds = variantCount * secPerPrompt * judgeMultiplier * ragMultiplier;
+        el.textContent = `Estimated analysis time: ${formatEstimate(estimatedSeconds)} (${variantCount} prompt${variantCount > 1 ? 's' : ''})`;
+    }
 }
 
 

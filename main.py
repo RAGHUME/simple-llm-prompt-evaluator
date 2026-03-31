@@ -38,6 +38,7 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+from collections import defaultdict, deque
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -58,6 +59,16 @@ init_db(DB_PATH)
 
 # ── Thread pool for CPU-bound LLM/eval work ──
 executor = ThreadPoolExecutor(max_workers=3)
+ETA_FALLBACK_SEC_PER_PROMPT = {
+    "phi3:mini": 2.0,
+    "phi3": 2.2,
+    "llama3": 4.8,
+    "mistral": 3.8,
+    "mistral:7b": 4.0,
+    "gemma:2b": 2.5,
+    "gemma:7b": 4.6,
+}
+model_runtime_samples_ms = defaultdict(lambda: deque(maxlen=100))
 
 # ── Lifespan: preload models at startup ──
 @asynccontextmanager
@@ -154,6 +165,14 @@ class BatchOptimizeRequest(BaseModel):
     items: List[BatchOptimizeItem]
     model: str = "phi3:mini"
     use_judge: bool = False
+
+class EtaRequest(BaseModel):
+    model: str = "phi3:mini"
+    prompt_count: int = Field(default=1, ge=1, le=2000)
+    use_judge: bool = False
+    use_rag: bool = False
+    operation: str = "evaluate"  # evaluate, compare, batch, matrix
+
 class HistoryEntry(BaseModel):
     id: int = 0
     prompt: str
@@ -176,6 +195,20 @@ async def run_in_thread(fn, *args):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, fn, *args)
 
+def _record_model_runtime(model: str, elapsed_ms: float):
+    """Store recent runtime samples to improve ETA accuracy over time."""
+    if not model or elapsed_ms <= 0:
+        return
+    model_runtime_samples_ms[model].append(float(elapsed_ms))
+
+def _base_seconds_per_prompt(model: str) -> float:
+    samples = model_runtime_samples_ms.get(model)
+    if samples and len(samples) > 0:
+        avg_ms = sum(samples) / len(samples)
+        # Clamp to avoid unstable spikes from one bad run.
+        return max(0.5, min(avg_ms / 1000.0, 60.0))
+    return ETA_FALLBACK_SEC_PER_PROMPT.get(model, 3.0)
+
 
 def _evaluate_single(prompt_text, reference, model, temperature, use_judge, assertions=None, context=None):
     """Synchronous function: generate + evaluate a single prompt."""
@@ -191,6 +224,7 @@ def _evaluate_single(prompt_text, reference, model, temperature, use_judge, asse
         context=context
     )
     elapsed_ms = (time.time() - start) * 1000
+    _record_model_runtime(model, elapsed_ms)
     return llm_output, eval_result, elapsed_ms
 
 
@@ -483,6 +517,39 @@ async def evaluate_matrix_endpoint(request: MatrixRequest):
 @app.get("/api/assertion-types")
 async def get_assertion_types():
     return ASSERTION_TYPES
+
+@app.post("/api/eta")
+async def estimate_eta(request: EtaRequest):
+    """
+    Estimate analysis time for a pending run.
+    Learns from recent runtime samples per model when available.
+    """
+    op = (request.operation or "evaluate").lower()
+    op_multiplier = {
+        "evaluate": 1.0,
+        "compare": 1.0,
+        "batch": 1.0,
+        "matrix": 1.0,
+    }.get(op, 1.0)
+    judge_multiplier = 1.35 if request.use_judge else 1.0
+    rag_multiplier = 1.2 if request.use_rag else 1.0
+    sec_per_prompt = _base_seconds_per_prompt(request.model)
+    estimated_seconds = request.prompt_count * sec_per_prompt * op_multiplier * judge_multiplier * rag_multiplier
+
+    return {
+        "operation": op,
+        "model": request.model,
+        "prompt_count": request.prompt_count,
+        "estimated_seconds": round(estimated_seconds, 1),
+        "estimated_ms": int(estimated_seconds * 1000),
+        "seconds_per_prompt": round(sec_per_prompt, 2),
+        "uses_runtime_samples": bool(model_runtime_samples_ms.get(request.model)),
+        "factors": {
+            "judge_multiplier": judge_multiplier,
+            "rag_multiplier": rag_multiplier,
+            "operation_multiplier": op_multiplier,
+        }
+    }
 
 
 # =====================
