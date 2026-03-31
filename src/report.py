@@ -5,6 +5,7 @@ Generates a professional PDF report of evaluation results.
 Uses fpdf2 for PDF creation and matplotlib for score charts.
 """
 
+import io
 import os
 import tempfile
 from datetime import datetime
@@ -37,8 +38,10 @@ class EvalReport(FPDF):
         self.cell(0, 10, f"Page {self.page_no()}/{{nb}}", align="C")
 
 
-def _create_score_chart(scores, filepath):
-    """Creates a bar chart of scores and saves it as an image."""
+def score_chart_png_bytes(scores: list) -> bytes:
+    """PNG bytes for the score bar chart (same style as the PDF report). Empty scores -> empty bytes."""
+    if not scores:
+        return b""
     fig, ax = plt.subplots(figsize=(10, 4))
     colors = ['#2ecc71' if s >= 80 else '#f39c12' if s >= 60 else '#e74c3c' for s in scores]
     ax.bar(range(len(scores)), scores, color=colors)
@@ -50,8 +53,19 @@ def _create_score_chart(scores, filepath):
     ax.axhline(y=60, color='orange', linestyle='--', alpha=0.5, label='OK (60+)')
     ax.legend()
     plt.tight_layout()
-    plt.savefig(filepath, dpi=150)
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=150)
     plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def _create_score_chart(scores, filepath):
+    """Creates a bar chart of scores and saves it as an image."""
+    data = score_chart_png_bytes(scores)
+    if data:
+        with open(filepath, "wb") as f:
+            f.write(data)
 
 
 def _safe_text(text, max_len=80):

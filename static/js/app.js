@@ -858,6 +858,7 @@ function parseCSV(text) {
     document.getElementById('ds-optimized-view').style.display = 'none';
     document.getElementById('btn-opt-batch').style.display = 'none';
     document.getElementById('btn-export-opt').style.display = 'none';
+    document.getElementById('btn-export-bundle-ds').style.display = 'none';
     window._datasetBatchResults = null;
 
     toast(`Loaded ${datasetPrompts.length} questions from CSV`, 'success');
@@ -890,6 +891,7 @@ function clearDataset() {
     document.getElementById('ds-optimized-view').style.display = 'none';
     document.getElementById('btn-opt-batch').style.display = 'none';
     document.getElementById('btn-export-opt').style.display = 'none';
+    document.getElementById('btn-export-bundle-ds').style.display = 'none';
 }
 
 async function runBatchEval() {
@@ -947,6 +949,7 @@ async function runBatchEval() {
         if (hasFailures) {
             document.getElementById('btn-opt-batch').style.display = '';
         }
+        document.getElementById('btn-export-bundle-ds').style.display = '';
 
         hideLoading();
         toast(`Batch complete — ${batchResults.length} prompts, avg: ${avgScore.toFixed(1)}`, 'success');
@@ -1542,6 +1545,96 @@ async function downloadReport(entryId) {
         toast('Report downloaded!', 'success');
     } catch (e) {
         toast('Report generation failed: ' + e.message, 'error');
+    }
+}
+
+function _downloadBlobAsFile(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+async function downloadTeamBundleFromHistory() {
+    toast('Building team bundle (ZIP)...', 'info');
+    try {
+        const res = await fetch('/api/export/bundle?limit=100');
+        if (!res.ok) {
+            let msg = await res.text();
+            try {
+                const j = JSON.parse(msg);
+                msg = j.detail || msg;
+            } catch (_) { /* plain */ }
+            throw new Error(msg || res.statusText);
+        }
+        const blob = await res.blob();
+        const zipBlob = blob.type === 'application/zip' ? blob : new Blob([blob], { type: 'application/zip' });
+        const cd = res.headers.get('Content-Disposition') || '';
+        let fname = `eval_team_bundle_history_${new Date().toISOString().slice(0, 10)}.zip`;
+        const m = cd.match(/filename="([^"]+)"/i) || cd.match(/filename=([^;\s]+)/i);
+        if (m) fname = m[1].trim().replace(/^"|"$/g, '');
+        _downloadBlobAsFile(zipBlob, fname);
+        toast('Team bundle downloaded (JSON, CSV, chart, PDF inside ZIP).', 'success');
+    } catch (e) {
+        toast('Bundle export failed: ' + e.message, 'error');
+    }
+}
+
+async function downloadTeamBundleFromDataset() {
+    if (!window._datasetBatchResults || window._datasetBatchResults.length === 0) {
+        return toast('Run batch evaluation first', 'error');
+    }
+    if (!datasetPrompts || datasetPrompts.length === 0) {
+        return toast('Reload your CSV if prompts are missing', 'error');
+    }
+    toast('Building team bundle (ZIP)...', 'info');
+    try {
+        const items = window._datasetBatchResults.map(r => {
+            const full = datasetPrompts[r.index - 1];
+            return {
+                index: r.index,
+                category: (full && full.category) || r.category,
+                prompt: (full && full.prompt) ? full.prompt : r.prompt,
+                expected_output: (full && full.expected_output) ? full.expected_output : r.expected,
+                llm_output: r.llm_output,
+                score: r.score,
+                similarity: r.similarity,
+                judge_score: r.judge_score,
+                feedback: r.feedback,
+            };
+        });
+        const res = await fetch('/api/export/bundle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                items,
+                model_name: selectedModel,
+                title: 'dataset_evaluation',
+            }),
+        });
+        if (!res.ok) {
+            let msg = await res.text();
+            try {
+                const j = JSON.parse(msg);
+                msg = j.detail || msg;
+            } catch (_) { /* plain */ }
+            throw new Error(msg || res.statusText);
+        }
+        const blob = await res.blob();
+        const zipBlob = blob.type === 'application/zip' ? blob : new Blob([blob], { type: 'application/zip' });
+        const cd = res.headers.get('Content-Disposition') || '';
+        let fname = `eval_team_bundle_dataset_${new Date().toISOString().slice(0, 10)}.zip`;
+        const m = cd.match(/filename="([^"]+)"/i) || cd.match(/filename=([^;\s]+)/i);
+        if (m) fname = m[1].trim().replace(/^"|"$/g, '');
+        _downloadBlobAsFile(zipBlob, fname);
+        toast('Team bundle downloaded (JSON, CSV, chart, PDF inside ZIP).', 'success');
+    } catch (e) {
+        toast('Bundle export failed: ' + e.message, 'error');
     }
 }
 

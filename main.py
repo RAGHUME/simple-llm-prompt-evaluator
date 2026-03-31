@@ -17,10 +17,12 @@ API Endpoints:
 - GET  /api/templates           - Get prompt templates
 - GET  /api/assertion-types     - Get available assertion rule types
 - GET  /api/report/download     - PDF from history (?entry_id= for single run; else up to 50 rows)
+- GET  /api/export/bundle       - ZIP: JSON + CSV + PNG chart + PDF (from history)
+- POST /api/export/bundle       - Same ZIP from client-supplied evaluation rows (e.g. dataset batch)
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse, Response, StreamingResponse
@@ -49,6 +51,7 @@ from src.evaluator import evaluate_response
 from src.optimizer import optimize_prompt
 from src.utils import init_db, save_to_db, get_history, clear_history, get_iterations, get_history_entry
 from src.report import generate_pdf_report
+from src.export_bundle import zip_from_history, zip_from_dataset_items
 from src.templates import PROMPT_TEMPLATES
 from src.embeddings import preload_model
 from src.assertions import ASSERTION_TYPES
@@ -184,6 +187,14 @@ class BatchOptimizeRequest(BaseModel):
     model: str = "phi3:mini"
     use_judge: bool = False
     fast_mode: bool = False
+
+
+class TeamBundlePost(BaseModel):
+    """Body for POST /api/export/bundle — typically dataset batch rows from the UI."""
+
+    items: List[Dict[str, Any]]
+    model_name: str = "phi3:mini"
+    title: Optional[str] = None
 
 class EtaRequest(BaseModel):
     model: str = "phi3:mini"
@@ -1254,6 +1265,64 @@ async def download_report(entry_id: Optional[int] = None):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(500, f"Report generation failed: {str(e)}")
+
+
+# =====================
+# API: Team export bundle (ZIP)
+# =====================
+
+
+def _zip_bundle_response(zip_bytes: bytes, label: str) -> Response:
+    ts = datetime.now().strftime("%Y%m%d_%H%M")
+    filename = f"eval_team_bundle_{label}_{ts}.zip"
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(zip_bytes)),
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@app.get("/api/export/bundle")
+async def export_bundle_from_history(limit: int = Query(50, ge=1, le=500)):
+    """ZIP with manifest.json, evaluations.json, evaluations.csv, scores_chart.png, eval_summary.pdf."""
+    try:
+        history = get_history(DB_PATH, limit=limit)
+        if not history:
+            raise HTTPException(404, "No evaluation history to export.")
+
+        def run():
+            return zip_from_history(history)
+
+        zip_bytes = await run_in_thread(run)
+        return _zip_bundle_response(zip_bytes, "history")
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, f"Export bundle failed: {str(e)}")
+
+
+@app.post("/api/export/bundle")
+async def export_bundle_from_body(body: TeamBundlePost):
+    """Build the same ZIP from rows supplied by the client (e.g. last dataset batch)."""
+    try:
+        if not body.items:
+            raise HTTPException(400, "items must include at least one row.")
+
+        def run():
+            return zip_from_dataset_items(body.items, body.model_name, title=body.title)
+
+        zip_bytes = await run_in_thread(run)
+        return _zip_bundle_response(zip_bytes, "dataset")
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, f"Export bundle failed: {str(e)}")
 
 
 if __name__ == "__main__":

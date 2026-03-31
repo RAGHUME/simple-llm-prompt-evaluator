@@ -239,6 +239,7 @@
           <span style="font-size:11px;color:var(--yellow);background:var(--yellow-bg);padding:3px 10px;border-radius:5px;font-weight:600" id="ds-badge">0 loaded</span>
           <button class="btn" onclick="clearDataset()">Clear</button>
           <button class="btn green" id="btn-export-opt" style="display:none;" onclick="exportOptimizedCSV()">Download CSV</button>
+          <button class="btn green" id="btn-export-bundle-ds" style="display:none;" onclick="downloadTeamBundleFromDataset()" title="ZIP with JSON, CSV, chart PNG, PDF">Export team bundle</button>
           <button class="btn" id="btn-opt-batch" style="display:none; border-color:var(--accent); color:var(--accent);" onclick="runDatasetOptimize()">Optimize Failed Prompts</button>
           <button class="btn primary" id="btn-run-batch" onclick="runBatchEval()">Run batch →</button>
         </div>
@@ -336,11 +337,11 @@
           <div class="card-title">How Each Page Works</div>
           <div class="guide-page-grid">
             <div class="guide-page"><div class="guide-page-title">Evaluate</div><div class="guide-page-desc">Create variants, run side-by-side scoring, and inspect best/worst outputs.</div></div>
-            <div class="guide-page"><div class="guide-page-title">Dataset Mode</div><div class="guide-page-desc">Upload CSV, batch-evaluate prompts, then auto-optimize failed rows.</div></div>
+            <div class="guide-page"><div class="guide-page-title">Dataset Mode</div><div class="guide-page-desc">Upload CSV, batch-evaluate, optimize failures, export CSV or a team bundle ZIP (JSON + chart + PDF).</div></div>
             <div class="guide-page"><div class="guide-page-title">Compare</div><div class="guide-page-desc">Paste multiple prompts and rank them directly against expected output.</div></div>
             <div class="guide-page"><div class="guide-page-title">Matrix</div><div class="guide-page-desc">Run the same prompts across multiple models to find model-prompt fit.</div></div>
             <div class="guide-page"><div class="guide-page-title">Iterations</div><div class="guide-page-desc">Track optimization lineage and score progression over versions.</div></div>
-            <div class="guide-page"><div class="guide-page-title">History</div><div class="guide-page-desc">Review previous runs, inspect details, and export PDF reports.</div></div>
+            <div class="guide-page"><div class="guide-page-title">History</div><div class="guide-page-desc">Review runs, PDF per row or full report, and one-click team bundle (ZIP) for sharing.</div></div>
           </div>
         </div>
       </div>
@@ -441,6 +442,7 @@
           <button class="btn danger" onclick="clearAllHistory()">Clear all</button>
           <button class="btn" onclick="fetchHistory()">Refresh</button>
           <button class="btn green" onclick="downloadReport()" title="Exports up to 50 recent runs. For a single run, open View on a row and use Download PDF there.">Download PDF</button>
+          <button class="btn green" onclick="downloadTeamBundleFromHistory()" title="ZIP: JSON, Excel-ready CSV, score chart PNG, and PDF summary (last 100 history rows).">Export team bundle</button>
         </div>
       </div>
       <div class="page-body">
