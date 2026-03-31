@@ -32,13 +32,34 @@ This framework moves beyond basic "eye-test" checks by providing **LLM-as-a-Judg
 | Feature | Description |
 |---------|-------------|
 | ⚡ **Concurrent Prompt Engine** | Evaluate multiple prompt strategies simultaneously using non-blocking async Python processing. |
+| 🧩 **Prompt Versioning + Diff Viewer** | See original vs optimized prompts side-by-side with highlighted added/removed words and score delta. |
+| ⏱️ **Pre-Run Cost/Compute Estimator** | Shows estimated runtime, token usage, and fast-vs-accurate recommendation before running Evaluate/Compare/Matrix/Dataset. |
 | 🛡️ **Assertion Rule Engine** | Enforce deterministic pass/fail rules: `Must contain`, `Regex match`, `Max/Min words`, `Valid JSON`. |
 | 📊 **Multi-Model Matrix** | Test N-prompts × M-models in a multi-dimensional visual heatmap. |
 | 📚 **RAG Metrics (Judge)** | True *Faithfulness* & *Answer Relevance* scoring using the LLM to grade its own logical output. |
 | 🗃️ **Large-Scale CSV Batching** | Upload large `.csv` datasets to evaluate hundreds of prompts asynchronously. |
 | 📈 **Self-Healing Iterations** | Automatically rewrite failing prompts, tracking the optimization history with Chart.js line graphs. |
-| 📋 **PDF Reports** | Download professional, color-coded evaluation reports directly to your machine. |
+| 📦 **Team Export Bundle** | One-click ZIP export with `JSON + Excel-ready CSV + score chart PNG + PDF summary` for sharing. |
+| 📋 **PDF Reports (Single + Full)** | Download full history report or a single-run PDF directly from the History detail view. |
+| 🚀 **Fast Mode** | Lower-latency mode with reduced token/time settings and fast-path evaluation options for quicker feedback loops. |
 | 🎨 **Premium UI/UX** | A custom-built, dark-first glassmorphism design system modeled after modern SaaS apps. |
+
+### 🔥 What’s New (Recent Updates)
+
+1. **Prompt diff viewer (versioning):**
+   - Word-level diff for optimized prompts
+   - Score delta (`old → new`) visible in Optimize, Dataset, and Iterations flows
+2. **Cost/compute estimator across pages:**
+   - Live estimate for runtime + token count
+   - Automatic fast-vs-accurate recommendation before runs
+3. **Team export bundle:**
+   - Export evaluations as one ZIP containing `manifest.json`, `evaluations.json`, `evaluations.csv`, `scores_chart.png`, and `eval_summary.pdf`
+4. **Improved reports and downloads:**
+   - Single-run PDF export from History row
+   - Better CSV compatibility for Excel (UTF-8 BOM + robust quoting)
+5. **Stable sharing workflow:**
+   - `start-share.bat` for one-click API + ngrok
+   - startup defaults tuned for non-reload stable public demos
 
 ---
 
@@ -67,193 +88,117 @@ Because this project uses **LLM-as-a-Judge** to evaluate hallucinations and rewr
 
 ---
 
-## 🚀 How to Run
+## 🚀 How to Run (Simple)
 
-### Choose your run path
+If you only need one clear setup path, follow this exact checklist.
 
-| Use case | Best method | Command |
-|---|---|---|
-| Local development/testing | Standard run | `python main.py` |
-| Local dev with auto-reload | Uvicorn dev mode | `uvicorn main:app --host 0.0.0.0 --port 8000 --reload` |
-| Windows local stable launch | Script | `start.bat` |
-| Windows public sharing (ngrok) | One-click share script | `start-share.bat` |
-| Linux/macOS local stable launch | Script | `./start.sh` |
-
-### Step 1: Clone the Repository
+### 1) Clone
 
 ```bash
 git clone https://github.com/RAGHUME/simple-llm-prompt-evaluator.git
 cd simple-llm-prompt-evaluator
 ```
 
-### Step 2: Create a Virtual Environment (Recommended)
+### 2) Create and activate virtual environment
 
-**Windows (PowerShell/CMD):**
+**Windows**
 ```bash
 python -m venv venv
 venv\Scripts\activate
 ```
 
-**macOS/Linux:**
+**macOS/Linux**
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
-### Step 3: Install Dependencies
+### 3) Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-> **Note:** The first install may take a few minutes as `sentence-transformers` downloads the embedding model (~90MB). This only happens once.
+### 4) Start Ollama and pull a model (first time only)
 
-### Step 4: Start Ollama
-
-Open a **separate terminal** and run:
+In another terminal:
 
 ```bash
 ollama serve
-```
-
-Then pull at least one model:
-
-```bash
 ollama pull phi3:mini
 ```
 
-Other recommended models:
-```bash
-ollama pull llama3
-ollama pull mistral
-```
+### 5) Start this project
 
-### Step 5: Start the Evaluator Server
-
-```bash
-python main.py
-```
-
-Or use uvicorn directly:
-
-```bash
-# Development only (auto-reload)
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-For stable sharing (ngrok/public demo), run WITHOUT reload:
-
-```bash
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-**Windows shortcuts:**
-- `start.bat` → local stable run (`http://localhost:8000`)
-- `start-share.bat` → stable public sharing (starts API + ngrok and prints tunnel URL)
-
-### Step 5.1: Fastest way to run (Windows)
-
-Local only:
-
+**Best for beginners (Windows):**
 ```bash
 start.bat
 ```
 
-Share publicly via ngrok:
+**Cross-platform manual start:**
+```bash
+python main.py
+```
+
+### 6) Open app
+
+- UI: [http://localhost:8000](http://localhost:8000)
+- API Docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+---
+
+## 🌍 Share Publicly with ngrok (Simple)
+
+### Windows (one command)
 
 ```bash
 start-share.bat
 ```
 
-### Step 6: Open the Dashboard
+It starts API + ngrok and opens your public URL.
 
-Open your browser and navigate to:
-
-| URL | Purpose |
-|-----|---------|
-| **http://localhost:8000** | Dashboard UI |
-| **http://localhost:8000/docs** | Interactive API Documentation (Swagger) |
-
-### Step 7: Share via ngrok (Stable Runbook)
-
-Use this sequence exactly to avoid random ngrok failures:
+### Manual (all OS)
 
 ```bash
 # Terminal A
 ollama serve
 
-# Terminal B (no --reload)
-uvicorn main:app --host 0.0.0.0 --port 8000
+# Terminal B (stable, no reload)
+python main.py
 
 # Terminal C
 ngrok http 8000
 ```
 
-Health checks before sharing:
+Use the HTTPS URL shown by ngrok.
+
+---
+
+## ❗ If Link Is Not Opening
+
+1. Check local API:
+   ```bash
+   curl http://127.0.0.1:8000/api/health
+   ```
+2. Restart ngrok:
+   ```bash
+   ngrok http 8000
+   ```
+3. Keep your PC awake and online.
+4. Free ngrok may show a warning page first — click **Visit Site**.
+5. Free ngrok URLs can change; update README link when that happens.
+
+---
+
+## Advanced Run Options (Optional)
+
+### Dev mode with auto-reload (not for public demo)
 
 ```bash
-curl http://127.0.0.1:8000/api/health
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Then open:
-
-- Local: `http://127.0.0.1:8000`
-- Tunnel: your `https://<random>.ngrok-free.dev`
-
-If you get `ERR_NGROK_8012`:
-
-1. Confirm app is reachable locally: `http://127.0.0.1:8000`
-2. Restart only ngrok: `ngrok http 8000`
-3. Do **not** run server with `--reload` during public demo
-4. If tunnel URL changed, update the README demo link
-
-### How the ngrok link works (important)
-
-Your ngrok URL (for example `https://your-subdomain.ngrok-free.dev`) is only a live tunnel to your local machine.
-It will open your project **only while these are running on your PC**:
-
-1. Ollama (if you use model features): `ollama serve`
-2. API server on port `8000` (stable mode, no reload):
-   - `python main.py` (default stable mode in this project), or
-   - `uvicorn main:app --host 0.0.0.0 --port 8000`
-3. ngrok tunnel targeting the same port:
-   - `ngrok http 8000`
-
-If any one of the above stops, the public link will stop working.
-
-#### What visitors may see
-
-- On free ngrok, visitors may first see a warning page and must click **Visit Site** once.
-- If they see `ERR_NGROK_8012` or 404, the tunnel is usually down/rotated or mapped to a wrong port.
-
-#### Quick recovery checklist
-
-```bash
-# 1) Local API check
-curl http://127.0.0.1:8000/api/health
-
-# 2) Restart tunnel if needed
-ngrok http 8000
-```
-
-- If ngrok prints a new URL, update your README/demo link.
-- Keep your machine awake and online while sharing.
-
-### Step 8 (Windows): One-click share
-
-If you are on Windows, use:
-
-```bash
-start-share.bat
-```
-
-This script:
-- starts API on `:8000` (no reload),
-- starts `ngrok http 8000`,
-- waits for health,
-- prints and opens the public ngrok URL.
-
-### Step 9 (Linux/macOS): stable local run
+### Stable Linux/macOS script
 
 ```bash
 chmod +x start.sh
@@ -267,6 +212,7 @@ chmod +x start.sh
 ### Evaluate Tab
 - Write your question and an optional reference/expected answer
 - Create multiple prompt variants with different strategies (Zero-Shot, Few-Shot, Chain-of-Thought, Role-Based)
+- See pre-run runtime/token estimate and recommendation in the top bar
 - Toggle **RAG Mode** to provide context documents for faithfulness scoring
 - Add **Assertion Rules** for pass/fail compliance checks
 - Click **Evaluate →** to run all variants concurrently
@@ -275,6 +221,7 @@ chmod +x start.sh
 - View optimization lineage history with interactive Chart.js graphs
 - Track how prompt scores improve across optimization attempts
 - Each optimization run creates a lineage with baseline → v2 → v3 progression
+- Open **vs prev** to inspect prompt version diffs between iterations
 - Data is populated automatically when you run **Improve worst** or **Optimize Failed Prompts**
 
 ### Compare Tab
@@ -288,12 +235,14 @@ chmod +x start.sh
 ### Dataset Mode
 - Upload a CSV with `prompt` and `expected_output` columns
 - Run batch evaluation and optimize failing prompts automatically
-- Export results as CSV
+- Open row-level prompt diffs (original vs optimized) with score gain
+- Export results as CSV or Team Bundle ZIP
 
 ### History Tab
 - View all past evaluation runs with scores, similarity, and feedback
 - Click **View** on any entry to see the full prompt analysis details
-- Download PDF reports of your evaluation history
+- Download full-history PDF, or single-run PDF from the detail modal
+- Export Team Bundle ZIP for sharing with others
 
 ---
 
