@@ -55,31 +55,62 @@ def _create_score_chart(scores, filepath):
 
 
 def _safe_text(text, max_len=80):
-    """Truncate and sanitize text for PDF table cells (latin-1)."""
+    """Truncate and sanitize text for PDF single-line cells (latin-1)."""
     if not text:
         return ""
     text = str(text).replace("\n", " ").replace("\r", "")
-    # FPDF's default font only supports latin-1. Replace unsupported chars (e.g., emojis)
-    text = text.encode('latin-1', 'replace').decode('latin-1')
+    text = text.encode("latin-1", "replace").decode("latin-1")
     if len(text) > max_len:
         return text[:max_len] + "..."
     return text
 
 
-def generate_pdf_report(results, model_name="Unknown", temperature=0.7):
+def _safe_text_multiline(text):
+    """Full body text for multi_cell: keep newlines, latin-1 only."""
+    if not text:
+        return ""
+    text = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    return text.encode("latin-1", "replace").decode("latin-1")
+
+
+def _pdf_write_block(pdf, label, body, content_width=190, line_height=5):
+    """Write a labeled section with wrapped paragraphs (readable in PDF viewers)."""
+    if pdf.get_y() > 250:
+        pdf.add_page()
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(0, line_height, label, new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 9)
+    txt = _safe_text_multiline(body)
+    if txt.strip():
+        pdf.multi_cell(
+            content_width,
+            line_height,
+            txt,
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+    else:
+        pdf.cell(0, line_height, "(empty)", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+
+def generate_pdf_report(results, model_name="Unknown", temperature=0.7, entry_id=None):
     """
     Generate a PDF report from evaluation results.
-    
+
     Args:
-        results: List of dicts with keys: Prompt, Expected, LLM Output, Score, Similarity
+        results: List of dicts with keys: Prompt, Expected, LLM Output, Score, Similarity, Feedback, Judge
         model_name: Name of the model used
         temperature: Temperature setting used
-    
+        entry_id: If set and len(results)==1, shown in the header (history row id).
+
     Returns:
         bytes: The PDF file content as bytes
     """
-    model_name = model_name.encode('latin-1', 'replace').decode('latin-1')
-    pdf = EvalReport()
+    model_name = model_name.encode("latin-1", "replace").decode("latin-1")
+    single = len(results) == 1
+    report_title = "Single Evaluation Report" if single else "LLM Prompt Evaluator Report"
+    pdf = EvalReport(title=report_title)
     pdf.alias_nb_pages()
     pdf.add_page()
 
@@ -87,7 +118,10 @@ def generate_pdf_report(results, model_name="Unknown", temperature=0.7):
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 8, "Configuration", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 10)
-    pdf.cell(0, 6, f"Model: {model_name}    |    Temperature: {temperature}    |    Total Prompts: {len(results)}", new_x="LMARGIN", new_y="NEXT")
+    head = f"Model: {model_name}    |    Temperature: {temperature}    |    Runs in report: {len(results)}"
+    if single and entry_id is not None:
+        head += f"    |    History ID: {entry_id}"
+    pdf.cell(0, 6, head, new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
     # --- Section 2: Summary Statistics ---
@@ -100,28 +134,59 @@ def generate_pdf_report(results, model_name="Unknown", temperature=0.7):
     pdf.cell(0, 8, "Summary Statistics", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(0, 6, f"Average Score: {avg_score:.1f}/100", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, f"Best Prompt (#{best_idx + 1}): {scores[best_idx]:.1f}/100 - {_safe_text(results[best_idx].get('Prompt', ''), 60)}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, f"Worst Prompt (#{worst_idx + 1}): {scores[worst_idx]:.1f}/100 - {_safe_text(results[worst_idx].get('Prompt', ''), 60)}", new_x="LMARGIN", new_y="NEXT")
-    
+    if single:
+        pdf.cell(
+            0,
+            6,
+            f"Score: {scores[0]:.1f}/100",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+    else:
+        pdf.cell(
+            0,
+            6,
+            f"Best Prompt (#{best_idx + 1}): {scores[best_idx]:.1f}/100 - {_safe_text(results[best_idx].get('Prompt', ''), 60)}",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+        pdf.cell(
+            0,
+            6,
+            f"Worst Prompt (#{worst_idx + 1}): {scores[worst_idx]:.1f}/100 - {_safe_text(results[worst_idx].get('Prompt', ''), 60)}",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+
     good = sum(1 for s in scores if s >= 80)
     ok = sum(1 for s in scores if 60 <= s < 80)
     poor = sum(1 for s in scores if s < 60)
-    pdf.cell(0, 6, f"Scores: {good} Good (80+)  |  {ok} OK (60-79)  |  {poor} Poor (<60)", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(
+        0,
+        6,
+        f"Scores: {good} Good (80+)  |  {ok} OK (60-79)  |  {poor} Poor (<60)",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
     pdf.ln(4)
 
     # --- Section 3: Score Chart ---
     if scores:
-        chart_path = os.path.join(tempfile.gettempdir(), "eval_chart.png")
-        _create_score_chart(scores, chart_path)
-        pdf.set_font("Helvetica", "B", 12)
-        pdf.cell(0, 8, "Score Distribution", new_x="LMARGIN", new_y="NEXT")
-        pdf.image(chart_path, x=10, w=190)
-        pdf.ln(4)
-        # Clean up temp file
+        fd, chart_path = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
         try:
-            os.remove(chart_path)
-        except OSError:
-            pass
+            _create_score_chart(scores, chart_path)
+            if pdf.get_y() > 200:
+                pdf.add_page()
+            pdf.set_font("Helvetica", "B", 12)
+            pdf.cell(0, 8, "Score Distribution", new_x="LMARGIN", new_y="NEXT")
+            pdf.image(chart_path, x=10, w=190)
+            pdf.ln(4)
+        finally:
+            try:
+                os.remove(chart_path)
+            except OSError:
+                pass
 
     # --- Section 4: Detailed Results ---
     pdf.add_page()
@@ -130,8 +195,7 @@ def generate_pdf_report(results, model_name="Unknown", temperature=0.7):
     pdf.ln(2)
 
     for i, r in enumerate(results):
-        # Check if we need a new page (leave space for content)
-        if pdf.get_y() > 240:
+        if pdf.get_y() > 255:
             pdf.add_page()
 
         score = r.get("Score", 0)
@@ -139,27 +203,28 @@ def generate_pdf_report(results, model_name="Unknown", temperature=0.7):
 
         pdf.set_font("Helvetica", "B", 10)
         pdf.set_text_color(*color)
-        pdf.cell(0, 6, f"#{i+1}  Score: {score:.1f}/100", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, f"#{i + 1}  Score: {score:.1f}/100", new_x="LMARGIN", new_y="NEXT")
         pdf.set_text_color(0, 0, 0)
 
-        pdf.set_font("Helvetica", "", 9)
-        pdf.cell(0, 5, f"Prompt: {_safe_text(r.get('Prompt', ''), 100)}", new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(0, 5, f"Expected: {_safe_text(r.get('Expected', ''), 100)}", new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(0, 5, f"LLM Output: {_safe_text(r.get('LLM Output', ''), 100)}", new_x="LMARGIN", new_y="NEXT")
+        _pdf_write_block(pdf, "Prompt:", r.get("Prompt", ""))
+        _pdf_write_block(pdf, "Expected:", r.get("Expected", ""))
+        _pdf_write_block(pdf, "LLM Output:", r.get("LLM Output", ""))
 
         sim = r.get("Similarity", None)
         judge = r.get("Judge", None)
         feedback = r.get("Feedback", "")
-        extra = f"Similarity: {sim*100:.1f}%" if sim else ""
+        parts = []
+        if sim is not None:
+            parts.append(f"Similarity: {float(sim) * 100:.1f}%")
         if judge is not None:
-            extra += f"  |  Judge: {judge}/10"
-        if extra:
-            pdf.cell(0, 5, extra, new_x="LMARGIN", new_y="NEXT")
+            parts.append(f"Judge: {judge}/10")
+        if parts:
+            pdf.set_font("Helvetica", "", 9)
+            pdf.cell(0, 5, "  |  ".join(parts), new_x="LMARGIN", new_y="NEXT")
         if feedback:
-            pdf.set_font("Helvetica", "I", 9)
-            pdf.cell(0, 5, f"Feedback: {_safe_text(feedback, 100)}", new_x="LMARGIN", new_y="NEXT")
+            _pdf_write_block(pdf, "Feedback:", feedback)
 
         pdf.ln(3)
 
-    # Return PDF as bytes (fpdf2 returns bytearray, FastAPI needs bytes)
-    return bytes(pdf.output())
+    out = pdf.output(dest="S")
+    return bytes(out) if not isinstance(out, bytes) else out

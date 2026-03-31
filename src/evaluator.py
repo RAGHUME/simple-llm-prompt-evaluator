@@ -128,7 +128,16 @@ def generate_feedback(results, expected_output=None):
 # Main Evaluation
 # =====================
 
-def evaluate_response(prompt, llm_output, expected_output=None, model=None, use_judge=False, assertions=None, context=None):
+def evaluate_response(
+    prompt,
+    llm_output,
+    expected_output=None,
+    model=None,
+    use_judge=False,
+    assertions=None,
+    context=None,
+    lite_metrics=False,
+):
     """
     Evaluate the LLM output using multiple metrics.
     
@@ -140,6 +149,7 @@ def evaluate_response(prompt, llm_output, expected_output=None, model=None, use_
         use_judge: Whether to use LLM-as-Judge scoring (slower but more accurate)
         assertions: List of assertion rule dicts (optional)
         context: RAG context documents for faithfulness/relevance (optional)
+        lite_metrics: If True, skip BLEU/ROUGE (faster CPU for batch/fast paths).
     
     Returns:
         Dictionary with all scores and feedback
@@ -167,12 +177,17 @@ def evaluate_response(prompt, llm_output, expected_output=None, model=None, use_
         similarity = calculate_semantic_similarity(llm_output, expected_output)
         results["semantic_similarity"] = similarity
 
-        # Calculate BLEU and ROUGE metrics
-        metrics = calculate_all_metrics(expected_output, llm_output)
-        results["bleu"] = metrics["bleu"]
-        results["rouge1"] = metrics["rouge1"]
-        results["rouge2"] = metrics["rouge2"]
-        results["rougeL"] = metrics["rougeL"]
+        if lite_metrics:
+            results["bleu"] = None
+            results["rouge1"] = None
+            results["rouge2"] = None
+            results["rougeL"] = None
+        else:
+            metrics = calculate_all_metrics(expected_output, llm_output)
+            results["bleu"] = metrics["bleu"]
+            results["rouge1"] = metrics["rouge1"]
+            results["rouge2"] = metrics["rouge2"]
+            results["rougeL"] = metrics["rougeL"]
 
         if use_judge:
             score_components.append(similarity * 100)

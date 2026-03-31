@@ -16,14 +16,14 @@ API Endpoints:
 - POST /api/history/clear       - Clear evaluation history
 - GET  /api/templates           - Get prompt templates
 - GET  /api/assertion-types     - Get available assertion rule types
-- GET  /api/report/download     - Download PDF report from history
+- GET  /api/report/download     - PDF from history (?entry_id= for single run; else up to 50 rows)
 """
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, FileResponse, Response
+from fastapi.responses import JSONResponse, FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uuid
@@ -39,6 +39,7 @@ from datetime import datetime
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict, deque
+import threading
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -57,8 +58,15 @@ from src.matrix import evaluate_matrix
 DB_PATH = os.path.join(os.path.dirname(__file__), "db", "results.db")
 init_db(DB_PATH)
 
-# ── Thread pool for CPU-bound LLM/eval work ──
-executor = ThreadPoolExecutor(max_workers=3)
+# ── Thread pool for CPU-bound LLM/eval work (must be >= peak parallel batch/matrix/optimize) ──
+MAX_BATCH_CONCURRENCY = int(os.environ.get("BATCH_MAX_CONCURRENCY", "6"))
+MAX_MATRIX_CONCURRENCY = int(os.environ.get("MATRIX_MAX_CONCURRENCY", "4"))
+MAX_OPTIMIZE_BATCH_CONCURRENCY = int(os.environ.get("OPTIMIZE_BATCH_CONCURRENCY", "2"))
+_EXECUTOR_WORKERS = max(
+    12,
+    MAX_BATCH_CONCURRENCY + MAX_MATRIX_CONCURRENCY + MAX_OPTIMIZE_BATCH_CONCURRENCY + 4,
+)
+executor = ThreadPoolExecutor(max_workers=_EXECUTOR_WORKERS)
 ETA_FALLBACK_SEC_PER_PROMPT = {
     "phi3:mini": 2.0,
     "phi3": 2.2,
@@ -69,6 +77,8 @@ ETA_FALLBACK_SEC_PER_PROMPT = {
     "gemma:7b": 4.6,
 }
 model_runtime_samples_ms = defaultdict(lambda: deque(maxlen=100))
+job_store: Dict[str, Dict[str, Any]] = {}
+job_lock = threading.Lock()
 
 # ── Lifespan: preload models at startup ──
 @asynccontextmanager
@@ -120,6 +130,8 @@ class EvaluateRequest(BaseModel):
     use_judge: bool = False
     assertions: Optional[List[Dict[str, str]]] = None
     context: Optional[str] = None
+    max_tokens: Optional[int] = Field(default=None, ge=32, le=2048)
+    fast_mode: bool = False
 
 class BatchEvaluateRequest(BaseModel):
     prompts: List[Dict[str, Any]]
@@ -128,6 +140,8 @@ class BatchEvaluateRequest(BaseModel):
     use_judge: bool = False
     assertions: Optional[List[Dict[str, str]]] = None
     context: Optional[str] = None
+    max_tokens: Optional[int] = Field(default=None, ge=32, le=2048)
+    fast_mode: bool = False
 
 class CompareRequest(BaseModel):
     query: str = ""
@@ -138,6 +152,8 @@ class CompareRequest(BaseModel):
     use_judge: bool = False
     assertions: Optional[List[Dict[str, str]]] = None
     context: Optional[str] = None
+    max_tokens: Optional[int] = Field(default=None, ge=32, le=2048)
+    fast_mode: bool = False
 
 class MatrixRequest(BaseModel):
     prompts: List[str]
@@ -147,6 +163,8 @@ class MatrixRequest(BaseModel):
     use_judge: bool = False
     assertions: Optional[List[Dict[str, str]]] = None
     context: Optional[str] = None
+    max_tokens: Optional[int] = Field(default=None, ge=32, le=2048)
+    fast_mode: bool = False
 
 class OptimizeRequest(BaseModel):
     original_prompt: str
@@ -165,6 +183,7 @@ class BatchOptimizeRequest(BaseModel):
     items: List[BatchOptimizeItem]
     model: str = "phi3:mini"
     use_judge: bool = False
+    fast_mode: bool = False
 
 class EtaRequest(BaseModel):
     model: str = "phi3:mini"
@@ -172,6 +191,8 @@ class EtaRequest(BaseModel):
     use_judge: bool = False
     use_rag: bool = False
     operation: str = "evaluate"  # evaluate, compare, batch, matrix
+    fast_mode: bool = False
+    max_tokens: Optional[int] = Field(default=None, ge=32, le=2048)
 
 class HistoryEntry(BaseModel):
     id: int = 0
@@ -209,19 +230,81 @@ def _base_seconds_per_prompt(model: str) -> float:
         return max(0.5, min(avg_ms / 1000.0, 60.0))
     return ETA_FALLBACK_SEC_PER_PROMPT.get(model, 3.0)
 
+def _create_job(job_type: str) -> str:
+    job_id = str(uuid.uuid4())
+    with job_lock:
+        job_store[job_id] = {
+            "id": job_id,
+            "type": job_type,
+            "status": "running",
+            "events": [],
+            "result": None,
+            "error": None,
+            "created_at": time.time(),
+            "updated_at": time.time(),
+        }
+    return job_id
 
-def _evaluate_single(prompt_text, reference, model, temperature, use_judge, assertions=None, context=None):
+def _append_job_event(job_id: str, payload: Dict[str, Any]):
+    with job_lock:
+        job = job_store.get(job_id)
+        if not job:
+            return
+        job["events"].append(payload)
+        job["updated_at"] = time.time()
+
+def _finish_job(job_id: str, result: Any):
+    with job_lock:
+        job = job_store.get(job_id)
+        if not job:
+            return
+        job["status"] = "completed"
+        job["result"] = result
+        job["updated_at"] = time.time()
+
+def _fail_job(job_id: str, error_msg: str):
+    with job_lock:
+        job = job_store.get(job_id)
+        if not job:
+            return
+        job["status"] = "failed"
+        job["error"] = error_msg
+        job["updated_at"] = time.time()
+
+
+def _evaluate_single(
+    prompt_text,
+    reference,
+    model,
+    temperature,
+    use_judge,
+    assertions=None,
+    context=None,
+    max_tokens=None,
+    fast_mode=False
+):
     """Synchronous function: generate + evaluate a single prompt."""
     start = time.time()
-    llm_output = generate_response(prompt_text, model=model, temperature=temperature)
+    effective_use_judge = bool(use_judge and not fast_mode)
+    effective_context = None if fast_mode else context
+    effective_max_tokens = max_tokens if max_tokens is not None else (128 if fast_mode else None)
+    effective_timeout = 45 if fast_mode else 120
+    llm_output = generate_response(
+        prompt_text,
+        model=model,
+        temperature=temperature,
+        max_tokens=effective_max_tokens,
+        timeout=effective_timeout
+    )
     eval_result = evaluate_response(
         prompt=prompt_text,
         llm_output=llm_output,
         expected_output=reference,
         model=model,
-        use_judge=use_judge,
+        use_judge=effective_use_judge,
         assertions=assertions,
-        context=context
+        context=effective_context,
+        lite_metrics=bool(fast_mode),
     )
     elapsed_ms = (time.time() - start) * 1000
     _record_model_runtime(model, elapsed_ms)
@@ -313,7 +396,9 @@ async def evaluate(request: EvaluateRequest):
                 request.temperature,
                 request.use_judge,
                 request.assertions,
-                request.context
+                request.context,
+                request.max_tokens,
+                request.fast_mode
             )
 
             overall = eval_result.get('overall_score', 0)
@@ -380,51 +465,142 @@ async def evaluate(request: EvaluateRequest):
 
 @app.post("/api/evaluate/batch")
 async def evaluate_batch(request: BatchEvaluateRequest):
-    results = []
-    total = len(request.prompts)
+    semaphore = asyncio.Semaphore(MAX_BATCH_CONCURRENCY)
 
-    for idx, item in enumerate(request.prompts):
+    async def eval_item(idx, item):
         prompt = item.get('prompt', '')
         expected = item.get('expected_output', '')
         category = item.get('category', 'General')
 
-        try:
-            llm_output, eval_result, elapsed_ms = await run_in_thread(
-                _evaluate_single,
-                prompt, expected,
-                request.model, request.temperature, request.use_judge,
-                request.assertions, request.context
-            )
+        async with semaphore:
+            try:
+                llm_output, eval_result, elapsed_ms = await run_in_thread(
+                    _evaluate_single,
+                    prompt, expected,
+                    request.model, request.temperature, request.use_judge,
+                    request.assertions, request.context,
+                    request.max_tokens, request.fast_mode
+                )
 
-            results.append({
-                "index": idx + 1,
-                "prompt": prompt[:200],
-                "expected": expected[:200],
-                "category": category,
-                "llm_output": llm_output[:300],
-                "score": round(eval_result['overall_score'], 2),
-                "bleu": round(eval_result.get('bleu', 0) or 0, 4),
-                "rouge1": round(eval_result.get('rouge1', 0) or 0, 4),
-                "similarity": round(eval_result.get('semantic_similarity', 0) or 0, 4),
-                "judge_score": eval_result.get('judge_score'),
-                "feedback": eval_result.get('feedback', ''),
-                "time_ms": round(elapsed_ms, 1)
-            })
-        except Exception as e:
-            results.append({
-                "index": idx + 1,
-                "prompt": prompt[:200],
-                "expected": expected[:200],
-                "category": category,
-                "llm_output": f"Error: {e}",
-                "score": 0,
-                "bleu": 0, "rouge1": 0, "similarity": 0,
-                "judge_score": None,
-                "feedback": str(e),
-                "time_ms": 0
-            })
+                return {
+                    "index": idx + 1,
+                    "prompt": prompt[:200],
+                    "expected": expected[:200],
+                    "category": category,
+                    "llm_output": llm_output[:300],
+                    "score": round(eval_result['overall_score'], 2),
+                    "bleu": round(eval_result.get('bleu', 0) or 0, 4),
+                    "rouge1": round(eval_result.get('rouge1', 0) or 0, 4),
+                    "similarity": round(eval_result.get('semantic_similarity', 0) or 0, 4),
+                    "judge_score": eval_result.get('judge_score'),
+                    "feedback": eval_result.get('feedback', ''),
+                    "time_ms": round(elapsed_ms, 1)
+                }
+            except Exception as e:
+                return {
+                    "index": idx + 1,
+                    "prompt": prompt[:200],
+                    "expected": expected[:200],
+                    "category": category,
+                    "llm_output": f"Error: {e}",
+                    "score": 0,
+                    "bleu": 0, "rouge1": 0, "similarity": 0,
+                    "judge_score": None,
+                    "feedback": str(e),
+                    "time_ms": 0
+                }
 
-    return results
+    tasks = [eval_item(idx, item) for idx, item in enumerate(request.prompts)]
+    results = await asyncio.gather(*tasks)
+    return list(results)
+
+def _run_batch_job(job_id: str, payload: Dict[str, Any]):
+    prompts = payload.get("prompts", []) or []
+    model = payload.get("model", "phi3:mini")
+    temperature = payload.get("temperature", 0.7)
+    use_judge = payload.get("use_judge", False)
+    assertions = payload.get("assertions")
+    context = payload.get("context")
+    max_tokens = payload.get("max_tokens")
+    fast_mode = payload.get("fast_mode", False)
+
+    total = len(prompts)
+    results = []
+    start_time = time.time()
+    _append_job_event(job_id, {"type": "started", "progress": 0, "message": f"Starting batch run ({total} prompts)"})
+
+    try:
+        def _eval_one(idx, item):
+            prompt = item.get('prompt', '')
+            expected = item.get('expected_output', '')
+            category = item.get('category', 'General')
+            step_start = time.time()
+            try:
+                llm_output, eval_result, elapsed_ms = _evaluate_single(
+                    prompt, expected, model, temperature, use_judge, assertions, context, max_tokens, fast_mode
+                )
+                return idx, {
+                    "index": idx + 1,
+                    "prompt": prompt[:200],
+                    "expected": expected[:200],
+                    "category": category,
+                    "llm_output": llm_output[:300],
+                    "score": round(eval_result['overall_score'], 2),
+                    "bleu": round(eval_result.get('bleu', 0) or 0, 4),
+                    "rouge1": round(eval_result.get('rouge1', 0) or 0, 4),
+                    "similarity": round(eval_result.get('semantic_similarity', 0) or 0, 4),
+                    "judge_score": eval_result.get('judge_score'),
+                    "feedback": eval_result.get('feedback', ''),
+                    "time_ms": round(elapsed_ms, 1)
+                }, round((time.time() - step_start) * 1000, 1)
+            except Exception as e:
+                return idx, {
+                    "index": idx + 1,
+                    "prompt": prompt[:200],
+                    "expected": expected[:200],
+                    "category": category,
+                    "llm_output": f"Error: {e}",
+                    "score": 0,
+                    "bleu": 0, "rouge1": 0, "similarity": 0,
+                    "judge_score": None,
+                    "feedback": str(e),
+                    "time_ms": 0
+                }, round((time.time() - step_start) * 1000, 1)
+
+        ordered_results: Dict[int, Dict[str, Any]] = {}
+        completed = 0
+        with ThreadPoolExecutor(max_workers=MAX_BATCH_CONCURRENCY) as pool:
+            future_to_idx = {
+                pool.submit(_eval_one, idx, item): idx
+                for idx, item in enumerate(prompts)
+            }
+            from concurrent.futures import as_completed
+            for future in as_completed(future_to_idx):
+                idx, row, step_ms = future.result()
+                ordered_results[idx] = row
+                completed += 1
+                progress = int((completed / max(total, 1)) * 100)
+                _append_job_event(job_id, {
+                    "type": "progress",
+                    "progress": progress,
+                    "completed": completed,
+                    "total": total,
+                    "step_ms": step_ms,
+                    "message": f"Processed prompt {completed}/{total}"
+                })
+
+        results = [ordered_results[i] for i in range(total)]
+
+        _append_job_event(job_id, {
+            "type": "complete",
+            "progress": 100,
+            "total_time_ms": round((time.time() - start_time) * 1000, 1),
+            "message": "Batch run complete"
+        })
+        _finish_job(job_id, results)
+    except Exception as e:
+        _append_job_event(job_id, {"type": "error", "message": str(e), "progress": 100})
+        _fail_job(job_id, str(e))
 
 
 # =====================
@@ -447,7 +623,9 @@ async def compare_prompts(request: CompareRequest):
                 request.temperature,
                 request.use_judge,
                 request.assertions,
-                request.context
+                request.context,
+                request.max_tokens,
+                request.fast_mode
             )
 
             return {
@@ -509,6 +687,186 @@ async def evaluate_matrix_endpoint(request: MatrixRequest):
         traceback.print_exc()
         raise HTTPException(500, f"Matrix evaluation failed: {str(e)}")
 
+def _run_matrix_job(job_id: str, payload: Dict[str, Any]):
+    prompts = payload.get("prompts", []) or []
+    models = payload.get("models", []) or []
+    expected_output = payload.get("expected_output", "")
+    temperature = payload.get("temperature", 0.7)
+    use_judge = payload.get("use_judge", False)
+    assertions = payload.get("assertions")
+    context = payload.get("context")
+    max_tokens = payload.get("max_tokens")
+    fast_mode = payload.get("fast_mode", False)
+
+    total = len(prompts) * len(models)
+    completed = 0
+    start_time = time.time()
+    _append_job_event(job_id, {"type": "started", "progress": 0, "message": f"Starting matrix run ({total} cells)"})
+
+    try:
+        results_map: Dict[tuple, Dict[str, Any]] = {}
+        tasks = []
+        for p_idx, prompt in enumerate(prompts):
+            for model in models:
+                tasks.append((p_idx, prompt, model))
+
+        with ThreadPoolExecutor(max_workers=MAX_MATRIX_CONCURRENCY) as pool:
+            future_to_key = {}
+            for p_idx, prompt, model in tasks:
+                future = pool.submit(
+                    _evaluate_single,
+                    prompt, expected_output, model, temperature, use_judge, assertions, context,
+                    max_tokens, fast_mode
+                )
+                future_to_key[future] = (p_idx, prompt, model)
+
+            from concurrent.futures import as_completed
+            for future in as_completed(future_to_key):
+                p_idx, prompt, model = future_to_key[future]
+                try:
+                    llm_output, eval_result, elapsed_ms = future.result()
+                    sim = eval_result.get('semantic_similarity')
+                    judge = eval_result.get('judge_score')
+                    cell = {
+                        "model": model,
+                        "llm_output": llm_output[:500],
+                        "score": round(eval_result.get("overall_score", 0), 2),
+                        "scores": {
+                            "semantic_similarity": round(sim or 0, 4),
+                            "bleu": round(eval_result.get("bleu", 0) or 0, 4),
+                            "rouge1": round(eval_result.get("rouge1", 0) or 0, 4),
+                            "judge": round((judge or 0) / 10, 4) if judge else None,
+                        },
+                        "word_count": eval_result.get("word_count", 0),
+                        "feedback": eval_result.get("feedback", ""),
+                        "time_ms": round(elapsed_ms, 1),
+                        "error": None,
+                        "assertions": eval_result.get("assertions") or {"results": [], "total": 0, "passed": 0, "failed": 0, "all_passed": True},
+                        "rag": eval_result.get("rag"),
+                    }
+                except Exception as e:
+                    cell = {
+                        "model": model,
+                        "llm_output": f"Error: {str(e)}",
+                        "score": 0,
+                        "scores": {"semantic_similarity": 0, "bleu": 0, "rouge1": 0, "judge": None},
+                        "word_count": 0,
+                        "feedback": str(e),
+                        "time_ms": 0,
+                        "error": str(e),
+                        "assertions": {"results": [], "total": 0, "passed": 0, "failed": 0, "all_passed": True},
+                        "rag": None,
+                    }
+
+                results_map[(p_idx, model)] = cell
+                completed += 1
+                progress = int((completed / max(total, 1)) * 100)
+                _append_job_event(job_id, {
+                    "type": "progress",
+                    "progress": progress,
+                    "completed": completed,
+                    "total": total,
+                    "message": f"Processed {completed}/{total} matrix cells"
+                })
+
+        rows = []
+        best_score = -1
+        best_model = ""
+        best_prompt_idx = 0
+        for p_idx, prompt in enumerate(prompts):
+            cells = []
+            for model in models:
+                cell = results_map.get((p_idx, model), {"model": model, "score": 0, "error": "Not evaluated"})
+                cells.append(cell)
+                if cell.get("score", 0) > best_score:
+                    best_score = cell["score"]
+                    best_model = model
+                    best_prompt_idx = p_idx
+
+            rows.append({"prompt": prompt[:200], "prompt_full": prompt, "cells": cells})
+
+        result = {
+            "rows": rows,
+            "models": models,
+            "summary": {
+                "best_model": best_model,
+                "best_prompt_index": best_prompt_idx,
+                "best_score": round(best_score, 2),
+                "total_evaluations": total,
+                "total_time_ms": round((time.time() - start_time) * 1000, 1),
+            }
+        }
+        _append_job_event(job_id, {"type": "complete", "progress": 100, "message": "Matrix run complete"})
+        _finish_job(job_id, result)
+    except Exception as e:
+        _append_job_event(job_id, {"type": "error", "message": str(e), "progress": 100})
+        _fail_job(job_id, str(e))
+
+@app.post("/api/jobs/batch/start")
+async def start_batch_job(request: BatchEvaluateRequest):
+    job_id = _create_job("batch")
+    thread = threading.Thread(target=_run_batch_job, args=(job_id, request.dict()), daemon=True)
+    thread.start()
+    return {"job_id": job_id, "type": "batch"}
+
+@app.post("/api/jobs/matrix/start")
+async def start_matrix_job(request: MatrixRequest):
+    job_id = _create_job("matrix")
+    thread = threading.Thread(target=_run_matrix_job, args=(job_id, request.dict()), daemon=True)
+    thread.start()
+    return {"job_id": job_id, "type": "matrix"}
+
+@app.get("/api/jobs/{job_id}/result")
+async def get_job_result(job_id: str):
+    with job_lock:
+        job = job_store.get(job_id)
+        if not job:
+            raise HTTPException(404, "Job not found")
+        return {
+            "id": job["id"],
+            "type": job["type"],
+            "status": job["status"],
+            "error": job["error"],
+            "result": job["result"],
+        }
+
+@app.get("/api/jobs/{job_id}/events")
+async def stream_job_events(job_id: str):
+    with job_lock:
+        job = job_store.get(job_id)
+        if not job:
+            raise HTTPException(404, "Job not found")
+
+    async def event_generator():
+        idx = 0
+        idle_ticks = 0
+        while True:
+            payload = None
+            status = "running"
+            with job_lock:
+                job = job_store.get(job_id)
+                if not job:
+                    payload = {"type": "error", "message": "Job not found"}
+                    status = "failed"
+                else:
+                    status = job["status"]
+                    if idx < len(job["events"]):
+                        payload = job["events"][idx]
+                        idx += 1
+
+            if payload is not None:
+                yield f"data: {json.dumps(payload)}\n\n"
+                idle_ticks = 0
+            else:
+                idle_ticks += 1
+                if idle_ticks % 20 == 0:
+                    yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+                if status in ("completed", "failed"):
+                    break
+                await asyncio.sleep(0.25)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 
 # =====================
 # API: Assertion Types (metadata for frontend dropdown)
@@ -533,8 +891,13 @@ async def estimate_eta(request: EtaRequest):
     }.get(op, 1.0)
     judge_multiplier = 1.35 if request.use_judge else 1.0
     rag_multiplier = 1.2 if request.use_rag else 1.0
+    token_multiplier = 1.0
+    if request.max_tokens and request.max_tokens > 0:
+        token_multiplier = max(0.5, min(request.max_tokens / 256.0, 4.0))
+    if request.fast_mode:
+        token_multiplier *= 0.65
     sec_per_prompt = _base_seconds_per_prompt(request.model)
-    estimated_seconds = request.prompt_count * sec_per_prompt * op_multiplier * judge_multiplier * rag_multiplier
+    estimated_seconds = request.prompt_count * sec_per_prompt * op_multiplier * judge_multiplier * rag_multiplier * token_multiplier
 
     return {
         "operation": op,
@@ -640,19 +1003,16 @@ async def optimize(request: OptimizeRequest):
 @app.post("/api/optimize/batch")
 async def optimize_batch(request: BatchOptimizeRequest):
     try:
-        results = []
-        improvements_count = 0
-        original_total_score = 0
-        new_total_score = 0
+        dataset_len = len(request.items) or 1
+        fast_mode = request.fast_mode
+        use_judge_eff = bool(request.use_judge and not fast_mode)
+        max_retries = 1 if fast_mode else 3
 
-        for idx, item in enumerate(request.items):
+        async def process_one(idx: int, item: BatchOptimizeItem):
             orig_score = item.score
-            original_total_score += orig_score
-
-            # Only optimize if score < 70 (or 0.7 depending on scale)
             threshold = 70.0 if orig_score > 1.0 else 0.7
             if orig_score >= threshold:
-                results.append({
+                row = {
                     "index": idx + 1,
                     "original_prompt": item.prompt,
                     "improved_prompt": item.prompt,
@@ -661,14 +1021,11 @@ async def optimize_batch(request: BatchOptimizeRequest):
                     "improvement_percent": 0.0,
                     "status": "passed",
                     "category": item.category,
-                    "iterations": []
-                })
-                new_total_score += orig_score
-                continue
+                    "iterations": [],
+                }
+                return row, orig_score, orig_score, False
 
-            # Need optimization
             lineage_id = str(uuid.uuid4())
-            # Save baseline (iteration 0)
             save_to_db(
                 DB_PATH,
                 prompt=item.prompt,
@@ -677,32 +1034,33 @@ async def optimize_batch(request: BatchOptimizeRequest):
                 model_name=request.model,
                 score=orig_score * 100 if orig_score <= 1.0 else orig_score,
                 lineage_id=lineage_id,
-                iteration=0
+                iteration=0,
             )
 
             def do_optimize():
-                # optimize_prompt uses 0-100 scale for inputs internally
                 norm_score = orig_score * 100 if orig_score <= 1.0 else orig_score
                 return optimize_prompt(
                     original_prompt=item.prompt,
                     expected_output=item.expected_output,
                     original_score=norm_score,
                     model=request.model,
-                    use_judge=request.use_judge,
-                    max_retries=3,
+                    use_judge=use_judge_eff,
+                    max_retries=max_retries,
                     db_path=DB_PATH,
-                    lineage_id=lineage_id
+                    lineage_id=lineage_id,
+                    fast_mode=fast_mode,
                 )
 
-            improved, new_response, new_eval, did_improve, iterations = await run_in_thread(do_optimize)
-            
-            new_score = new_eval['overall_score']
-            improvement = ((new_score - orig_score) / max(orig_score, 0.01)) * 100 if orig_score > 1.0 else ((new_score/100 - orig_score) / max(orig_score, 0.01)) * 100
-            
-            # Since new_eval['overall_score'] is 0-100, we need to map it back if original was 0-1
+            improved, _new_response, new_eval, did_improve, iterations = await run_in_thread(do_optimize)
+            new_score = new_eval["overall_score"]
+            improvement = (
+                ((new_score - orig_score) / max(orig_score, 0.01)) * 100
+                if orig_score > 1.0
+                else ((new_score / 100 - orig_score) / max(orig_score, 0.01)) * 100
+            )
             final_new_score = new_score if orig_score > 1.0 else new_score / 100
-            
-            results.append({
+
+            row = {
                 "index": idx + 1,
                 "original_prompt": item.prompt,
                 "improved_prompt": improved,
@@ -711,21 +1069,39 @@ async def optimize_batch(request: BatchOptimizeRequest):
                 "improvement_percent": round(improvement, 1),
                 "status": "optimized" if did_improve else "failed_to_improve",
                 "category": item.category,
-                "iterations": iterations
-            })
-            new_total_score += final_new_score
-            if did_improve:
+                "iterations": iterations,
+            }
+            return row, orig_score, final_new_score, bool(did_improve)
+
+        sem = asyncio.Semaphore(MAX_OPTIMIZE_BATCH_CONCURRENCY)
+
+        async def bounded(idx: int, item: BatchOptimizeItem):
+            async with sem:
+                return await process_one(idx, item)
+
+        ordered = await asyncio.gather(
+            *[bounded(i, it) for i, it in enumerate(request.items)]
+        )
+
+        results = []
+        original_total_score = 0.0
+        new_total_score = 0.0
+        improvements_count = 0
+        for row, orig_s, new_s, imp in ordered:
+            results.append(row)
+            original_total_score += orig_s
+            new_total_score += new_s
+            if imp:
                 improvements_count += 1
 
-        dataset_len = len(request.items) or 1
         return {
             "summary": {
                 "total_prompts": dataset_len,
                 "prompts_optimized": improvements_count,
                 "original_avg_score": round(original_total_score / dataset_len, 2),
-                "new_avg_score": round(new_total_score / dataset_len, 2)
+                "new_avg_score": round(new_total_score / dataset_len, 2),
             },
-            "results": results
+            "results": results,
         }
 
     except Exception as e:
@@ -823,10 +1199,20 @@ async def upload_csv(file: UploadFile = File(...)):
 # =====================
 
 @app.get("/api/report/download")
-async def download_report():
-    """Generate and download a PDF report from evaluation history."""
+async def download_report(entry_id: Optional[int] = None):
+    """
+    Generate and download a PDF report from evaluation history.
+    Omit entry_id for a summary report (up to 50 recent runs).
+    Pass entry_id to download a single-run PDF for that history row.
+    """
     try:
-        history = get_history(DB_PATH, limit=50)
+        if entry_id is not None:
+            row = get_history_entry(DB_PATH, entry_id)
+            if not row:
+                raise HTTPException(404, "History entry not found.")
+            history = [row]
+        else:
+            history = get_history(DB_PATH, limit=50)
         if not history:
             raise HTTPException(404, "No evaluation history to generate report from.")
 
@@ -843,12 +1229,25 @@ async def download_report():
             })
 
         model_name = history[0].get('model_name', 'Unknown') if history else 'Unknown'
-        pdf_bytes = generate_pdf_report(report_data, model_name=model_name)
+        pdf_bytes = generate_pdf_report(
+            report_data,
+            model_name=model_name,
+            entry_id=entry_id if entry_id is not None else None,
+        )
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M")
+        filename = f"eval_run_{entry_id}_{ts}.pdf" if entry_id is not None else f"eval_report_{ts}.pdf"
+        # ASCII-only filename for broad browser / OS compatibility
+        cd = f'attachment; filename="{filename}"'
 
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=eval_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"}
+            headers={
+                "Content-Disposition": cd,
+                "Content-Length": str(len(pdf_bytes)),
+                "Cache-Control": "no-store",
+            },
         )
     except HTTPException:
         raise

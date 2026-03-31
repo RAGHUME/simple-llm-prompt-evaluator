@@ -18,6 +18,7 @@ logger = get_logger(__name__)
 BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_API_URL = f"{BASE_URL}/api/generate"
 OLLAMA_TAGS_URL = f"{BASE_URL}/api/tags"
+DEFAULT_NUM_PREDICT = int(os.environ.get("OLLAMA_DEFAULT_NUM_PREDICT", "256"))
 
 # TTL-based cache for model listing (refreshes every 30s)
 _models_cache = {"models": [], "timestamp": 0, "ttl": 30}
@@ -68,7 +69,7 @@ def generate_response(prompt, model="phi3:mini", temperature=0.7, max_tokens=Non
         "keep_alive": "5m",
         "options": {
             "temperature": temperature,
-            "num_predict": max_tokens or 512
+            "num_predict": max_tokens or DEFAULT_NUM_PREDICT
         }
     }
 

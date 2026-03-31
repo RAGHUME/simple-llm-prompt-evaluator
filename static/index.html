@@ -76,6 +76,13 @@
     </div>
 
     <div class="sidebar-footer">
+      <label class="toggle-label" style="margin-bottom:8px;justify-content:space-between;">
+        <span style="font-size:11px;">Fast Mode</span>
+        <span style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="fast-mode-toggle">
+          <span class="toggle-switch"></span>
+        </span>
+      </label>
       <div class="status-card" id="system-status">
         <div class="status-title">System status</div>
         <div class="status-row"><span class="s-dot" style="background:var(--text-muted)"></span>Connecting...</div>
@@ -189,7 +196,7 @@
         <div class="topbar-right">
           <button class="btn ghost" onclick="showPage('evaluate')">← Back</button>
           <button class="btn" id="btn-improve" onclick="runOptimize()">Improve worst →</button>
-          <button class="btn green" onclick="downloadReport()">Download PDF</button>
+          <button class="btn green" onclick="downloadReport()" title="Exports up to 50 recent history runs. Single-run PDF: History → View → Download PDF.">Download PDF</button>
         </div>
       </div>
       <div class="page-body">
@@ -433,7 +440,7 @@
           <span style="font-size:11px;color:var(--text-muted)" id="history-count">0 total runs</span>
           <button class="btn danger" onclick="clearAllHistory()">Clear all</button>
           <button class="btn" onclick="fetchHistory()">Refresh</button>
-          <button class="btn green" onclick="downloadReport()">Download PDF</button>
+          <button class="btn green" onclick="downloadReport()" title="Exports up to 50 recent runs. For a single run, open View on a row and use Download PDF there.">Download PDF</button>
         </div>
       </div>
       <div class="page-body">

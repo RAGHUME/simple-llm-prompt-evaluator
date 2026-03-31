@@ -31,6 +31,7 @@ let promptCount = 0;
 let assertions = [];
 let loadingTimerHandle = null;
 let etaRequestId = 0;
+let fastMode = false;
 
 const STRATEGIES = ['zero-shot', 'few-shot', 'chain-of-thought', 'role-based'];
 const STRAT_TAGS = ['tag-zs', 'tag-fs', 'tag-cot', 'tag-rb'];
@@ -43,6 +44,17 @@ const MODEL_SEC_PER_PROMPT = {
     'gemma:2b': 2.5,
     'gemma:7b': 4.6
 };
+
+/** Quote CSV field (RFC 4180). */
+function csvEscapeField(val) {
+    const s = val === null || val === undefined ? '' : String(val);
+    return '"' + s.replace(/"/g, '""') + '"';
+}
+
+/** UTF-8 BOM + CRLF so Microsoft Excel opens UTF-8 correctly on Windows. */
+function buildExcelCsv(rowStrings) {
+    return '\uFEFF' + rowStrings.join('\r\n');
+}
 
 
 // ═══════════════════════════════════
@@ -75,6 +87,7 @@ initTheme();
 
 // ── Initialization ──
 document.addEventListener('DOMContentLoaded', async () => {
+    setupFastModeToggle();
     setupJudgeToggle();
     setupRagToggle();
     setupDragDrop();
@@ -84,6 +97,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     fetchHistory();
     fetchIterations(false);
 });
+
+function setupFastModeToggle() {
+    const toggle = document.getElementById('fast-mode-toggle');
+    if (!toggle) return;
+    toggle.addEventListener('change', (e) => {
+        fastMode = e.target.checked;
+        syncFastModeUi();
+        updateEstimatedTime();
+        toast(fastMode ? 'Fast Mode enabled: lower tokens + judge/rag off' : 'Fast Mode disabled', 'info');
+    });
+}
+
+function syncFastModeUi() {
+    const judgeToggle = document.getElementById('judge-toggle');
+    const ragToggle = document.getElementById('rag-toggle');
+    const matrixJudgeToggle = document.getElementById('matrix-judge-toggle');
+
+    if (fastMode) {
+        useJudge = false;
+        useRag = false;
+        if (judgeToggle) judgeToggle.checked = false;
+        if (ragToggle) ragToggle.checked = false;
+        if (matrixJudgeToggle) matrixJudgeToggle.checked = false;
+    }
+
+    if (judgeToggle) judgeToggle.disabled = fastMode;
+    if (ragToggle) ragToggle.disabled = fastMode;
+    if (matrixJudgeToggle) matrixJudgeToggle.disabled = fastMode;
+
+    const wrap = document.getElementById('rag-context-wrap');
+    if (wrap) wrap.style.display = useRag ? '' : 'none';
+}
 
 
 // ═══════════════════════════════════
@@ -447,8 +492,10 @@ async function updateEstimatedTimeFromApi() {
                 operation: 'evaluate',
                 model: selectedModel,
                 prompt_count: variantCount,
-                use_judge: useJudge,
-                use_rag: useRag
+                use_judge: fastMode ? false : useJudge,
+                use_rag: fastMode ? false : useRag,
+                fast_mode: fastMode,
+                max_tokens: fastMode ? 160 : null
             })
         });
 
@@ -510,9 +557,11 @@ async function runEvaluation() {
                 prompt_variants: variants,
                 model: selectedModel,
                 temperature: 0.7,
-                use_judge: useJudge,
+                use_judge: fastMode ? false : useJudge,
                 assertions: assertions.length > 0 ? assertions : null,
-                context: context || null
+                context: fastMode ? null : (context || null),
+                fast_mode: fastMode,
+                max_tokens: fastMode ? 160 : null
             })
         });
 
@@ -851,16 +900,26 @@ async function runBatchEval() {
     showLoading('Batch evaluation...', `Processing ${datasetPrompts.length} prompts with ${selectedModel}`);
 
     try {
-        const res = await fetch('/api/evaluate/batch', {
+        const startRes = await fetch('/api/jobs/batch/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 prompts: datasetPrompts, model: selectedModel,
-                temperature: 0.7, use_judge: useJudge
+                temperature: 0.7,
+                use_judge: fastMode ? false : useJudge,
+                fast_mode: fastMode,
+                max_tokens: fastMode ? 128 : null
             })
         });
-        if (!res.ok) throw new Error(await res.text());
-        const batchResults = await res.json();
+        if (!startRes.ok) throw new Error(await startRes.text());
+        const { job_id: jobId } = await startRes.json();
+
+        const batchResults = await waitForStreamingJob(jobId, (evt) => {
+            if (evt.type !== 'progress') return;
+            const percent = evt.progress || 0;
+            const msg = evt.message || `Processed ${evt.completed || 0}/${evt.total || datasetPrompts.length}`;
+            updateLoading(percent, msg);
+        });
         
         window._datasetBatchResults = batchResults;
 
@@ -915,7 +974,8 @@ async function runDatasetOptimize() {
     try {
         const payload = {
             model: selectedModel,
-            use_judge: useJudge,
+            use_judge: fastMode ? false : useJudge,
+            fast_mode: fastMode,
             items: window._datasetBatchResults.map(r => ({
                 prompt: r.prompt,
                 expected_output: r.expected,
@@ -994,30 +1054,32 @@ async function runDatasetOptimize() {
 
 function exportOptimizedCSV() {
     if (!window._optimizedDataset || window._optimizedDataset.length === 0) return;
-    
-    // Create CSV content
+
     const headers = ['id', 'category', 'original_prompt', 'optimized_prompt', 'original_score', 'optimized_score', 'status'];
-    const rows = window._optimizedDataset.map(r => [
-        r.index,
-        `"${(r.category || 'General').replace(/"/g, '""')}"`,
-        `"${r.original_prompt.replace(/"/g, '""')}"`,
-        `"${r.improved_prompt.replace(/"/g, '""')}"`,
-        r.original_score,
-        r.improved_score,
-        r.status
-    ]);
-    
-    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
-    
-    // Create Blob and download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const headerLine = headers.map(csvEscapeField).join(',');
+    const dataLines = window._optimizedDataset.map(r =>
+        [
+            csvEscapeField(r.index),
+            csvEscapeField(r.category || 'General'),
+            csvEscapeField(r.original_prompt),
+            csvEscapeField(r.improved_prompt),
+            csvEscapeField(r.original_score),
+            csvEscapeField(r.improved_score),
+            csvEscapeField(r.status)
+        ].join(',')
+    );
+    const csvContent = buildExcelCsv([headerLine, ...dataLines]);
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `optimized_dataset_${new Date().toISOString().slice(0,10)}.csv`);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `optimized_dataset_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 
@@ -1040,7 +1102,11 @@ async function runCompare() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 query: '', prompts, expected_output: expected,
-                model: selectedModel, temperature: 0.7, use_judge: useJudge
+                model: selectedModel,
+                temperature: 0.7,
+                use_judge: fastMode ? false : useJudge,
+                fast_mode: fastMode,
+                max_tokens: fastMode ? 160 : null
             })
         });
         if (!res.ok) throw new Error(await res.text());
@@ -1117,17 +1183,28 @@ async function runMatrix() {
     showLoading('Running matrix evaluation...', `${prompts.length} prompts × ${models.length} models = ${prompts.length * models.length} evaluations`);
 
     try {
-        const res = await fetch('/api/evaluate/matrix', {
+        const startRes = await fetch('/api/jobs/matrix/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 prompts, models, expected_output: expected,
-                temperature: 0.7, use_judge: matrixJudge,
-                assertions: assertions.length > 0 ? assertions : null
+                temperature: 0.7,
+                use_judge: fastMode ? false : matrixJudge,
+                assertions: assertions.length > 0 ? assertions : null,
+                fast_mode: fastMode,
+                max_tokens: fastMode ? 160 : null
             })
         });
-        if (!res.ok) throw new Error(await res.text());
-        const result = await res.json();
+        if (!startRes.ok) throw new Error(await startRes.text());
+        const { job_id: jobId } = await startRes.json();
+
+        const result = await waitForStreamingJob(jobId, (evt) => {
+            if (evt.type !== 'progress') return;
+            const percent = evt.progress || 0;
+            const msg = evt.message || `Processed ${evt.completed || 0}/${evt.total || (prompts.length * models.length)} matrix cells`;
+            updateLoading(percent, msg);
+        });
+
         renderMatrix(result);
         hideLoading();
         toast(`Matrix complete — best: ${result.summary.best_model} (${result.summary.best_score})`, 'success');
@@ -1137,6 +1214,72 @@ async function runMatrix() {
     } finally {
         btn.disabled = false;
     }
+}
+
+async function waitForStreamingJob(jobId, onProgress) {
+    return new Promise((resolve, reject) => {
+        let done = false;
+        const es = new EventSource(`/api/jobs/${jobId}/events`);
+
+        es.onmessage = async (msg) => {
+            if (!msg || !msg.data) return;
+            let evt;
+            try {
+                evt = JSON.parse(msg.data);
+            } catch (_) {
+                return;
+            }
+
+            if (evt.type === 'progress') {
+                if (typeof onProgress === 'function') onProgress(evt);
+                return;
+            }
+            if (evt.type === 'heartbeat' || evt.type === 'started') return;
+            if (evt.type === 'error') {
+                done = true;
+                es.close();
+                reject(new Error(evt.message || 'Job failed'));
+                return;
+            }
+            if (evt.type === 'complete') {
+                try {
+                    const res = await fetch(`/api/jobs/${jobId}/result`);
+                    if (!res.ok) throw new Error('Could not fetch job result');
+                    const finalPayload = await res.json();
+                    if (finalPayload.status !== 'completed') {
+                        throw new Error(finalPayload.error || 'Job did not complete');
+                    }
+                    done = true;
+                    es.close();
+                    resolve(finalPayload.result);
+                } catch (e) {
+                    done = true;
+                    es.close();
+                    reject(e);
+                }
+            }
+        };
+
+        es.onerror = async () => {
+            if (done) return;
+            // Fallback: if stream disconnects near completion, try reading final result once.
+            try {
+                const res = await fetch(`/api/jobs/${jobId}/result`);
+                if (res.ok) {
+                    const finalPayload = await res.json();
+                    if (finalPayload.status === 'completed') {
+                        done = true;
+                        es.close();
+                        resolve(finalPayload.result);
+                        return;
+                    }
+                }
+            } catch (_) { }
+            done = true;
+            es.close();
+            reject(new Error('Progress stream disconnected'));
+        };
+    });
 }
 
 function renderMatrix(data) {
@@ -1330,7 +1473,16 @@ async function viewHistoryEntry(entryId) {
                 <div class="detail-section-title"><span class="detail-icon" style="background:var(--yellow-bg);color:var(--yellow)">💬</span> Feedback</div>
                 <div class="detail-text-block" style="font-style:italic">${entry.feedback}</div>
             </div>` : ''}
+
+            <div class="detail-actions" style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+              <button type="button" class="btn green" data-entry-pdf="${entry.id}">Download PDF (this run only)</button>
+              <span style="font-size:11px;color:var(--text-muted)">Full history PDF uses the History page &quot;Download PDF&quot; button.</span>
+            </div>
         `;
+        const pdfBtn = body.querySelector('[data-entry-pdf]');
+        if (pdfBtn) {
+            pdfBtn.addEventListener('click', () => downloadReport(entry.id));
+        }
     } catch (e) {
         body.innerHTML = `<div class="empty-state" style="padding:40px;color:var(--red)">Failed to load details: ${e.message}</div>`;
     }
@@ -1353,18 +1505,40 @@ document.getElementById('history-detail-modal')?.addEventListener('click', (e) =
 // REPORT DOWNLOAD
 // ═══════════════════════════════════
 
-async function downloadReport() {
+async function downloadReport(entryId) {
     toast('Generating PDF report...', 'info');
     try {
-        const res = await fetch('/api/report/download');
-        if (!res.ok) throw new Error(await res.text());
+        const wantSingle = entryId != null && entryId !== '';
+        let url = '/api/report/download';
+        if (wantSingle) {
+            url = '/api/report/download?entry_id=' + encodeURIComponent(entryId);
+        }
+        const res = await fetch(url);
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        if (!res.ok) {
+            let msg = await res.text();
+            try {
+                const j = JSON.parse(msg);
+                msg = j.detail || msg;
+            } catch (_) { /* plain text */ }
+            throw new Error(msg || res.statusText);
+        }
+        if (!ct.includes('pdf')) {
+            const msg = await res.text();
+            throw new Error(msg || 'Server did not return a PDF');
+        }
         const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
+        const pdfBlob = blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' });
+        const objUrl = URL.createObjectURL(pdfBlob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = `eval_report_${new Date().toISOString().slice(0, 10)}.pdf`;
+        a.href = objUrl;
+        const day = new Date().toISOString().slice(0, 10);
+        a.download = wantSingle ? `eval_run_${entryId}_${day}.pdf` : `eval_report_${day}.pdf`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
         a.click();
-        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objUrl);
         toast('Report downloaded!', 'success');
     } catch (e) {
         toast('Report generation failed: ' + e.message, 'error');

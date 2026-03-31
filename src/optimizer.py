@@ -16,7 +16,7 @@ from src.utils import get_logger, save_to_db
 logger = get_logger(__name__)
 
 
-def _generate_improved_prompt(original_prompt, expected_output, current_score, model, temperature):
+def _generate_improved_prompt(original_prompt, expected_output, current_score, model, temperature, fast_mode=False):
     """
     Internal helper that asks the LLM to improve the given prompt.
     """
@@ -52,7 +52,12 @@ STRATEGY: {strategy}
 Return ONLY the improved prompt. No explanations, no commentary, no quotes around it."""
 
     logger.info(f"Optimizing prompt using strategy: {strategy}, model: {model}, temp: {temperature}")
-    improved_prompt = generate_response(sys_prompt, model=model, temperature=temperature)
+    if fast_mode:
+        improved_prompt = generate_response(
+            sys_prompt, model=model, temperature=temperature, max_tokens=256, timeout=50
+        )
+    else:
+        improved_prompt = generate_response(sys_prompt, model=model, temperature=temperature)
     
     # Clean up the response — remove quotes and extra whitespace
     improved = improved_prompt.strip()
@@ -64,7 +69,17 @@ Return ONLY the improved prompt. No explanations, no commentary, no quotes aroun
     return improved
 
 
-def optimize_prompt(original_prompt, expected_output, original_score, model="llama3", use_judge=False, max_retries=3, db_path=None, lineage_id=None):
+def optimize_prompt(
+    original_prompt,
+    expected_output,
+    original_score,
+    model="llama3",
+    use_judge=False,
+    max_retries=3,
+    db_path=None,
+    lineage_id=None,
+    fast_mode=False,
+):
     """
     Iteratively tries to write a better prompt. Tests the output internally.
     Guarantees that the returned score is >= the original score.
@@ -77,16 +92,33 @@ def optimize_prompt(original_prompt, expected_output, original_score, model="lla
     did_improve = False
     iterations_list = []
 
+    eff_judge = bool(use_judge and not fast_mode)
+    lite = bool(fast_mode)
+
     for attempt in range(max_retries):
         # Slightly increase temperature on retries to get different ideas
         temp = 0.7 + (attempt * 0.1)
         
         # 1. Generate new prompt
-        candidate_prompt = _generate_improved_prompt(original_prompt, expected_output, original_score, model, temp)
+        candidate_prompt = _generate_improved_prompt(
+            original_prompt, expected_output, original_score, model, temp, fast_mode=fast_mode
+        )
         
         # 2. Automatically test the new prompt
-        candidate_resp = generate_response(candidate_prompt, model=model, temperature=0.7)
-        candidate_eval = evaluate_response(candidate_prompt, candidate_resp, expected_output, model=model, use_judge=use_judge)
+        if fast_mode:
+            candidate_resp = generate_response(
+                candidate_prompt, model=model, temperature=0.7, max_tokens=160, timeout=55
+            )
+        else:
+            candidate_resp = generate_response(candidate_prompt, model=model, temperature=0.7)
+        candidate_eval = evaluate_response(
+            candidate_prompt,
+            candidate_resp,
+            expected_output,
+            model=model,
+            use_judge=eff_judge,
+            lite_metrics=lite,
+        )
         candidate_score = candidate_eval['overall_score']
         
         logger.info(f"Optimization Attempt {attempt+1}/{max_retries}: Score went from {original_score:.1f} -> {candidate_score:.1f}")
@@ -130,7 +162,19 @@ def optimize_prompt(original_prompt, expected_output, original_score, model="lla
     if not did_improve:
         logger.warning(f"Failed to optimally improve prompt after {max_retries} attempts. Keeping original.")
         # Generate a baseline evaluation just in case the caller needs it
-        best_resp = generate_response(original_prompt, model=model, temperature=0.7)
-        best_eval = evaluate_response(original_prompt, best_resp, expected_output, model=model, use_judge=use_judge)
+        if fast_mode:
+            best_resp = generate_response(
+                original_prompt, model=model, temperature=0.7, max_tokens=160, timeout=55
+            )
+        else:
+            best_resp = generate_response(original_prompt, model=model, temperature=0.7)
+        best_eval = evaluate_response(
+            original_prompt,
+            best_resp,
+            expected_output,
+            model=model,
+            use_judge=eff_judge,
+            lite_metrics=lite,
+        )
         
     return best_prompt, best_resp, best_eval, did_improve, iterations_list
