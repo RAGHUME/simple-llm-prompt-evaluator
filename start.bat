@@ -64,4 +64,7 @@ echo.
 REM Automatically open the default web browser after 3 seconds
 start /B cmd /c "timeout /t 3 /nobreak >nul & start http://localhost:8000"
 
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+REM Stable by default (no --reload) to avoid restarts during demos/sharing.
+REM For live-reload dev, run manually:
+REM   uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn main:app --host 0.0.0.0 --port 8000

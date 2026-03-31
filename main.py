@@ -1327,4 +1327,8 @@ async def export_bundle_from_body(body: TeamBundlePost):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8000"))
+    # Keep auto-reload OFF by default to avoid restarts during ngrok/public demos.
+    reload_dev = os.environ.get("UVICORN_RELOAD", "0").lower() in {"1", "true", "yes"}
+    uvicorn.run("main:app", host=host, port=port, reload=reload_dev)

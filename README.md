@@ -10,7 +10,7 @@
 
 <br/>
 
-> **🔗 Live Demo:** Currently accessible via (https://unequilateral-upbraidingly-rena.ngrok-free.dev) (Deployed locally).
+> **🔗 Live Demo:** Use your current ngrok URL (free ngrok links can expire/change).
 > 
 > **How to Access the Live Demo:**
 > 1. Click the Ngrok Tunnel link above.
@@ -18,8 +18,8 @@
 > 3. Click the **"Visit Site"** button on that screen.
 > 4. The application dashboard will load directly from my local machine! Feel free to run prompt evaluations to see it in action.
 > 
-> 🛑 **Note for Developer (How to fix `ERR_NGROK_8012` `undefined://undefined`):** 
-> If you see this error, it means Ngrok is running but not correctly pointing to the local server. To fix this, stop your current Ngrok terminal and run exactly this command: `ngrok http 8000`. Make sure the FastAPI server is also running (`python main.py`).
+> 🛑 **Note for Developer (How to fix `ERR_NGROK_8012` / `undefined://undefined`):**
+> This almost always means the tunnel target is wrong or your app restarted. Use the "Stable ngrok runbook" below (`reload` must be OFF).
 
 > **Stop guessing which prompt works best.** Connect locally to Ollama and systematically grade prompt engineering variations to scientifically determine which prompts produce the absolute best outputs.
 
@@ -127,10 +127,19 @@ python main.py
 Or use uvicorn directly:
 
 ```bash
+# Development only (auto-reload)
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-**Windows shortcut:** Double-click `start.bat` — it checks everything and starts automatically.
+For stable sharing (ngrok/public demo), run WITHOUT reload:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+**Windows shortcuts:**
+- `start.bat` → local stable run (`http://localhost:8000`)
+- `start-share.bat` → stable public sharing (starts API + ngrok and prints tunnel URL)
 
 ### Step 6: Open the Dashboard
 
@@ -140,6 +149,60 @@ Open your browser and navigate to:
 |-----|---------|
 | **http://localhost:8000** | Dashboard UI |
 | **http://localhost:8000/docs** | Interactive API Documentation (Swagger) |
+
+### Step 7: Share via ngrok (Stable Runbook)
+
+Use this sequence exactly to avoid random ngrok failures:
+
+```bash
+# Terminal A
+ollama serve
+
+# Terminal B (no --reload)
+uvicorn main:app --host 0.0.0.0 --port 8000
+
+# Terminal C
+ngrok http 8000
+```
+
+Health checks before sharing:
+
+```bash
+curl http://127.0.0.1:8000/api/health
+```
+
+Then open:
+
+- Local: `http://127.0.0.1:8000`
+- Tunnel: your `https://<random>.ngrok-free.dev`
+
+If you get `ERR_NGROK_8012`:
+
+1. Confirm app is reachable locally: `http://127.0.0.1:8000`
+2. Restart only ngrok: `ngrok http 8000`
+3. Do **not** run server with `--reload` during public demo
+4. If tunnel URL changed, update the README demo link
+
+### Step 8 (Windows): One-click share
+
+If you are on Windows, use:
+
+```bash
+start-share.bat
+```
+
+This script:
+- starts API on `:8000` (no reload),
+- starts `ngrok http 8000`,
+- waits for health,
+- prints and opens the public ngrok URL.
+
+### Step 9 (Linux/macOS): stable local run
+
+```bash
+chmod +x start.sh
+./start.sh
+```
 
 ---
 
@@ -186,6 +249,7 @@ simple-llm-prompt-evaluator/
 ├── requirements.txt        # Python dependencies
 ├── start.bat               # Windows startup script
 ├── start.sh                # Linux/macOS startup script
+├── start-share.bat         # Windows one-click API + ngrok sharing
 │
 ├── src/                    # Backend modules
 │   ├── llm.py              # Ollama API communication
@@ -281,6 +345,15 @@ pip install -r requirements.txt
 
 ### "sentence-transformers is slow to load"
 The first run downloads the embedding model (~90MB). Subsequent runs use the cached model and start in seconds. The model loads at startup via `preload_model()`.
+
+### ngrok URL opens warning page, not app
+This is expected on free ngrok. Click **Visit Site** once, then it forwards to your app.
+
+### ngrok URL not opening app (expired / 404 / `ERR_NGROK_8012`)
+1. Ensure API is running locally: `http://127.0.0.1:8000/api/health`
+2. Restart only ngrok: `ngrok http 8000`
+3. Use stable mode (no `--reload`) while sharing publicly
+4. Update README/demo link with the new tunnel URL (free URLs can rotate)
 
 ### Port 8000 already in use
 ```bash
