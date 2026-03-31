@@ -743,14 +743,18 @@ async function runOptimize() {
         if (!res.ok) throw new Error(await res.text());
         optimizeResult = await res.json();
 
-        document.getElementById('optimize-body').innerHTML = `
-            <div class="stats-row">
-                <div class="stat-card"><div class="stat-label">Original</div><div class="stat-value" style="color:var(--red)">${optimizeResult.original_score.toFixed(1)}</div></div>
-                <div class="stat-card"><div class="stat-label">Improved</div><div class="stat-value" style="color:var(--green)">${optimizeResult.improved_score.toFixed(1)}</div></div>
-                <div class="stat-card"><div class="stat-label">Gain</div><div class="stat-value" style="color:var(--accent)">${optimizeResult.improvement_percent > 0 ? '+' : ''}${optimizeResult.improvement_percent.toFixed(1)}%</div></div>
-                <div class="stat-card"><div class="stat-label">Status</div><div class="stat-value" style="color:${optimizeResult.did_improve ? 'var(--green)' : 'var(--yellow)'}">${optimizeResult.did_improve ? '✓' : '—'}</div><div class="stat-sub">${optimizeResult.did_improve ? 'Improved' : 'No improvement found'}</div></div>
-            </div>
-            <div class="two-col">
+        const diffCard = typeof PromptDiff !== 'undefined'
+            ? `<div class="card">
+                <div class="card-title">Prompt version diff</div>
+                ${PromptDiff.promptDiffPanelHtml(
+                    optimizeResult.original_prompt,
+                    optimizeResult.improved_prompt,
+                    optimizeResult.original_score,
+                    optimizeResult.improved_score,
+                    'Evaluate → Improve worst'
+                )}
+            </div>`
+            : `<div class="two-col">
                 <div class="card">
                     <div class="card-title" style="color:var(--red)">Original prompt — ${optimizeResult.original_score.toFixed(1)}</div>
                     <div class="prompt-chip">${optimizeResult.original_prompt}</div>
@@ -758,9 +762,20 @@ async function runOptimize() {
                 <div class="card">
                     <div class="card-title" style="color:var(--green)">Improved prompt — ${optimizeResult.improved_score.toFixed(1)}</div>
                     <div class="improved-prompt">${optimizeResult.improved_prompt}</div>
-                    <div class="card-title" style="margin-top:14px">Changes made</div>
-                    ${optimizeResult.changes_made.map(c => `<div style="display:flex;gap:6px;font-size:12px;color:var(--text-secondary);padding:3px 0"><span style="color:var(--green)">✓</span>${c}</div>`).join('')}
                 </div>
+            </div>`;
+
+        document.getElementById('optimize-body').innerHTML = `
+            <div class="stats-row">
+                <div class="stat-card"><div class="stat-label">Original</div><div class="stat-value" style="color:var(--red)">${optimizeResult.original_score.toFixed(1)}</div></div>
+                <div class="stat-card"><div class="stat-label">Improved</div><div class="stat-value" style="color:var(--green)">${optimizeResult.improved_score.toFixed(1)}</div></div>
+                <div class="stat-card"><div class="stat-label">Gain</div><div class="stat-value" style="color:var(--accent)">${optimizeResult.improvement_percent > 0 ? '+' : ''}${optimizeResult.improvement_percent.toFixed(1)}%</div></div>
+                <div class="stat-card"><div class="stat-label">Status</div><div class="stat-value" style="color:${optimizeResult.did_improve ? 'var(--green)' : 'var(--yellow)'}">${optimizeResult.did_improve ? '✓' : '—'}</div><div class="stat-sub">${optimizeResult.did_improve ? 'Improved' : 'No improvement found'}</div></div>
+            </div>
+            ${diffCard}
+            <div class="card">
+                <div class="card-title">Change summary</div>
+                ${optimizeResult.changes_made.map(c => `<div style="display:flex;gap:6px;font-size:12px;color:var(--text-secondary);padding:3px 0"><span style="color:var(--green)">✓</span>${c}</div>`).join('')}
             </div>
             ${optimizeResult.new_response ? `
             <div class="card">
@@ -1035,11 +1050,16 @@ async function runDatasetOptimize() {
                             <div style="font-size:10px;margin-top:2px"><span style="color:${origColor}">${r.original_score.toFixed(1)}</span> → <span style="color:${newColor}">${r.improved_score.toFixed(1)}</span></div>${itHtml}`;
             }
             
+            const diffBtn = typeof PromptDiff === 'undefined'
+                ? '<span style="color:var(--text-muted);font-size:11px">—</span>'
+                : `<button type="button" class="btn-view" onclick="openOptimizedRowDiff(${r.index})">View diff</button>`;
+
             tbody.innerHTML += `<tr>
                 <td style="color:var(--text-muted)">${r.index}</td>
                 <td style="font-size:11px;font-family:var(--mono);color:var(--text-secondary)" title="${r.original_prompt.replace(/"/g, '&quot;')}">${truncate(r.original_prompt, 80)}</td>
                 <td style="font-size:11px;font-family:var(--mono);color:${isImproved ? 'var(--green)' : 'var(--text-secondary)'}" title="${r.improved_prompt.replace(/"/g, '&quot;')}">${truncate(r.improved_prompt, 80)}</td>
                 <td>${gainHtml}</td>
+                <td>${diffBtn}</td>
             </tr>`;
         });
         
@@ -1495,12 +1515,70 @@ function closeHistoryDetail() {
     document.getElementById('history-detail-modal').classList.remove('active');
 }
 
+function openPromptDiffModal(original, improved, originalScore, improvedScore, subtitle) {
+    if (typeof PromptDiff === 'undefined') {
+        toast('Diff viewer failed to load (prompt-diff.js)', 'error');
+        return;
+    }
+    document.getElementById('prompt-diff-modal-body').innerHTML = PromptDiff.promptDiffPanelHtml(
+        original, improved, originalScore, improvedScore, subtitle || ''
+    );
+    document.getElementById('prompt-diff-modal').classList.add('active');
+}
+
+function closePromptDiffModal() {
+    document.getElementById('prompt-diff-modal').classList.remove('active');
+}
+
+function openOptimizedRowDiff(rowIndex) {
+    const rows = window._optimizedDataset;
+    if (!rows || typeof PromptDiff === 'undefined') return;
+    const r = rows.find(x => x.index === rowIndex);
+    if (!r) {
+        toast('Row not found', 'error');
+        return;
+    }
+    openPromptDiffModal(
+        r.original_prompt,
+        r.improved_prompt,
+        r.original_score,
+        r.improved_score,
+        'Dataset row #' + rowIndex
+    );
+}
+
+function openLineageVersionDiff(lineageId, currIdx) {
+    if (typeof PromptDiff === 'undefined') return;
+    const lin = window._lineageById && window._lineageById[lineageId];
+    if (!lin || currIdx < 1) return;
+    const prevIt = lin.iterations[currIdx - 1];
+    const curIt = lin.iterations[currIdx];
+    if (!prevIt || !curIt) return;
+    const prevPrompt = prevIt.prompt || '';
+    const curPrompt = curIt.prompt || '';
+    const os = prevIt.score != null ? Number(prevIt.score) : 0;
+    const ns = curIt.score != null ? Number(curIt.score) : 0;
+    openPromptDiffModal(
+        prevPrompt,
+        curPrompt,
+        os,
+        ns,
+        'Lineage · v' + currIdx + ' → v' + (currIdx + 1)
+    );
+}
+
 // Close modal on Escape key or clicking overlay background
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeHistoryDetail();
+    if (e.key === 'Escape') {
+        closePromptDiffModal();
+        closeHistoryDetail();
+    }
 });
 document.getElementById('history-detail-modal')?.addEventListener('click', (e) => {
     if (e.target.classList.contains('modal-overlay')) closeHistoryDetail();
+});
+document.getElementById('prompt-diff-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'prompt-diff-modal') closePromptDiffModal();
 });
 
 
@@ -1663,7 +1741,10 @@ async function fetchIterations(showOverlay = true) {
             return;
         }
 
+        window._lineageById = {};
+
         data.iterations.forEach(lin => {
+            window._lineageById[lin.lineage_id] = lin;
             const card = document.createElement('div');
             card.className = 'card';
             
@@ -1684,7 +1765,7 @@ async function fetchIterations(showOverlay = true) {
                     <canvas id="chart-${lin.lineage_id}"></canvas>
                 </div>
                 <table class="data-table">
-                  <thead><tr><th>Version</th><th style="min-width:300px">Prompt</th><th>Total Score</th><th>Similarity</th></tr></thead>
+                  <thead><tr><th>Version</th><th style="min-width:280px">Prompt</th><th>Total Score</th><th>Similarity</th><th>Diff</th></tr></thead>
                   <tbody id="tbody-${lin.lineage_id}"></tbody>
                 </table>
             `;
@@ -1699,11 +1780,16 @@ async function fetchIterations(showOverlay = true) {
                 let sc = it.score;
                 let isWinner = (idx === lin.iterations.length - 1 && sc > lin.iterations[0].score);
                 
+                const diffCell = (idx === 0 || typeof PromptDiff === 'undefined')
+                    ? '<span style="color:var(--text-muted);font-size:11px">—</span>'
+                    : `<button type="button" class="btn-view" onclick='openLineageVersionDiff(${JSON.stringify(lin.lineage_id)}, ${idx})'>vs prev</button>`;
+
                 tr.innerHTML = `
                     <td><span class="pill ${isWinner ? 'pill-g' : 'pill-b'}">${tag}</span></td>
                     <td style="font-size:11px; max-width:300px; line-height:1.4">${idx === 0 ? lin.original_prompt : it.prompt}</td>
                     <td style="font-weight:600; color:${isWinner ? 'var(--green)' : 'var(--text)'}">${sc.toFixed(1)}</td>
                     <td>${it.semantic_similarity ? (it.semantic_similarity*100).toFixed(0)+'%' : '—'}</td>
+                    <td>${diffCell}</td>
                 `;
                 tbody.appendChild(tr);
             });

@@ -288,9 +288,10 @@
             <table class="data-table">
               <thead><tr>
                 <th>#</th>
-                <th style="width:35%">Original Prompt</th>
-                <th style="width:35%">Optimized Prompt</th>
+                <th style="width:32%">Original Prompt</th>
+                <th style="width:32%">Optimized Prompt</th>
                 <th>Score Gain</th>
+                <th>Diff</th>
               </tr></thead>
               <tbody id="ds-opt-results-body"></tbody>
             </table>
@@ -336,11 +337,11 @@
         <div class="card">
           <div class="card-title">How Each Page Works</div>
           <div class="guide-page-grid">
-            <div class="guide-page"><div class="guide-page-title">Evaluate</div><div class="guide-page-desc">Create variants, run side-by-side scoring, and inspect best/worst outputs.</div></div>
-            <div class="guide-page"><div class="guide-page-title">Dataset Mode</div><div class="guide-page-desc">Upload CSV, batch-evaluate, optimize failures, export CSV or a team bundle ZIP (JSON + chart + PDF).</div></div>
+            <div class="guide-page"><div class="guide-page-title">Evaluate</div><div class="guide-page-desc">Create variants, run scoring, then Improve worst to see a highlighted original vs optimized diff with score delta.</div></div>
+            <div class="guide-page"><div class="guide-page-title">Dataset Mode</div><div class="guide-page-desc">Upload CSV, batch-evaluate, optimize failures, view side-by-side prompt diffs with score Δ, export CSV or team bundle ZIP.</div></div>
             <div class="guide-page"><div class="guide-page-title">Compare</div><div class="guide-page-desc">Paste multiple prompts and rank them directly against expected output.</div></div>
             <div class="guide-page"><div class="guide-page-title">Matrix</div><div class="guide-page-desc">Run the same prompts across multiple models to find model-prompt fit.</div></div>
-            <div class="guide-page"><div class="guide-page-title">Iterations</div><div class="guide-page-desc">Track optimization lineage and score progression over versions.</div></div>
+            <div class="guide-page"><div class="guide-page-title">Iterations</div><div class="guide-page-desc">Track lineage, score progression, and open “vs prev” diffs between prompt versions.</div></div>
             <div class="guide-page"><div class="guide-page-title">History</div><div class="guide-page-desc">Review runs, PDF per row or full report, and one-click team bundle (ZIP) for sharing.</div></div>
           </div>
         </div>
@@ -469,10 +470,23 @@
       </div>
     </div>
 
+    <!-- ─── PROMPT DIFF MODAL (dataset / lineage) ─── -->
+    <div class="modal-overlay" id="prompt-diff-modal">
+      <div class="modal-box" style="max-width: min(960px, 96vw);">
+        <div class="modal-header">
+          <div class="modal-title">Prompt version diff</div>
+          <button class="modal-close" type="button" onclick="closePromptDiffModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="prompt-diff-modal-body" style="max-height: 75vh; overflow-y: auto;">
+        </div>
+      </div>
+    </div>
+
   </div><!-- /main -->
 </div><!-- /app -->
 
 <script src="/static/js/chart.umd.js"></script>
+<script src="/static/js/prompt-diff.js"></script>
 <script src="/static/js/app.js"></script>
 </body>
 </html>
