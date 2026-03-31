@@ -237,6 +237,7 @@
         </div>
         <div class="topbar-right">
           <span style="font-size:11px;color:var(--yellow);background:var(--yellow-bg);padding:3px 10px;border-radius:5px;font-weight:600" id="ds-badge">0 loaded</span>
+          <span class="time-estimate" id="dataset-compute-estimate">Est.: ~0s · ~0 tokens · fast</span>
           <button class="btn" onclick="clearDataset()">Clear</button>
           <button class="btn green" id="btn-export-opt" style="display:none;" onclick="exportOptimizedCSV()">Download CSV</button>
           <button class="btn green" id="btn-export-bundle-ds" style="display:none;" onclick="downloadTeamBundleFromDataset()" title="ZIP with JSON, CSV, chart PNG, PDF">Export team bundle</button>
@@ -355,6 +356,7 @@
           <span class="breadcrumb">Workspace / <span>Compare Prompts</span></span>
         </div>
         <div class="topbar-right">
+          <span class="time-estimate" id="compare-compute-estimate">Est.: ~0s · ~0 tokens · fast</span>
           <span style="font-size:11px;color:var(--text-muted)">Compare multiple prompts side-by-side</span>
         </div>
       </div>
@@ -381,6 +383,7 @@
           <span class="breadcrumb">Workspace / <span>Multi-Model Matrix</span></span>
         </div>
         <div class="topbar-right">
+          <span class="time-estimate" id="matrix-compute-estimate">Est.: ~0s · ~0 tokens · fast</span>
           <label class="toggle-label">
             <input type="checkbox" id="matrix-judge-toggle">
             <span class="toggle-switch"></span>

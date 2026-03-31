@@ -96,6 +96,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateEstimatedTime();
     fetchHistory();
     fetchIterations(false);
+
+    // Cost/compute estimator input hooks
+    document.getElementById('query-input')?.addEventListener('input', updateEstimatedTime);
+    document.getElementById('compare-prompts')?.addEventListener('input', updateCompareEstimate);
+    document.getElementById('compare-expected')?.addEventListener('input', updateCompareEstimate);
+    document.getElementById('matrix-prompts')?.addEventListener('input', updateMatrixEstimate);
+    document.getElementById('matrix-expected')?.addEventListener('input', updateMatrixEstimate);
+    document.getElementById('matrix-judge-toggle')?.addEventListener('change', updateMatrixEstimate);
 });
 
 function setupFastModeToggle() {
@@ -154,6 +162,9 @@ function showPage(id) {
     if (id === 'history') fetchHistory();
     if (id === 'matrix') populateMatrixModels();
     if (id === 'iterations') fetchIterations();
+    if (id === 'evaluate' || id === 'compare' || id === 'matrix' || id === 'dataset') {
+        updateEstimatedTime();
+    }
 }
 
 function showLoading(text = 'Processing...', sub = '') {
@@ -473,8 +484,65 @@ function formatEstimate(seconds) {
     return secs > 0 ? `~${mins}m ${secs}s` : `~${mins}m`;
 }
 
+function _tokensLabel(n) {
+    if (n < 1000) return `~${Math.round(n)} tokens`;
+    return `~${(n / 1000).toFixed(1)}k tokens`;
+}
+
+function _estimateInputTokens(texts) {
+    const clean = (texts || []).map(t => (t || '').trim()).filter(Boolean);
+    if (!clean.length) return 20;
+    const chars = clean.reduce((acc, t) => acc + t.length, 0);
+    return Math.max(20, Math.round(chars / 4));
+}
+
+function _recommendRunMode(etaSeconds, promptCount, hasJudge, hasRag) {
+    if (fastMode) return 'Recommendation: fast preset';
+    if (etaSeconds > 120 || promptCount > 40) return 'Recommendation: fast preset';
+    if (hasJudge || hasRag || etaSeconds > 35) return 'Recommendation: accurate preset';
+    return 'Recommendation: fast preset';
+}
+
+async function renderComputeEstimate(elId, params) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    try {
+        const res = await fetch('/api/eta', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params)
+        });
+        if (!res.ok) throw new Error('ETA request failed');
+        const eta = await res.json();
+        const estimatedSec = Number(eta.estimated_seconds || 0);
+        const calls = Math.max(1, Number(params.prompt_count || 1));
+        const inputTokensPerCall = _estimateInputTokens(params.sample_texts || []);
+        const outTokensPerCall = params.max_tokens || (params.fast_mode ? 128 : 256);
+        const totalTokens = calls * (inputTokensPerCall + outTokensPerCall);
+        const rec = _recommendRunMode(estimatedSec, calls, !!params.use_judge, !!params.use_rag);
+        el.textContent = `Est.: ${formatEstimate(estimatedSec)} · ${_tokensLabel(totalTokens)} · ${rec.replace('Recommendation: ', '')}`;
+        el.title = `${rec}. Calls: ${calls}. Source: ${eta.uses_runtime_samples ? 'learned runtime' : 'default model profile'}.`;
+    } catch (_) {
+        const calls = Math.max(1, Number(params.prompt_count || 1));
+        const secPerPrompt = MODEL_SEC_PER_PROMPT[selectedModel] || 3.0;
+        const judgeMultiplier = params.use_judge ? 1.35 : 1;
+        const ragMultiplier = params.use_rag ? 1.2 : 1;
+        const fastMultiplier = params.fast_mode ? 0.65 : 1;
+        const estimatedSeconds = calls * secPerPrompt * judgeMultiplier * ragMultiplier * fastMultiplier;
+        const inputTokensPerCall = _estimateInputTokens(params.sample_texts || []);
+        const outTokensPerCall = params.max_tokens || (params.fast_mode ? 128 : 256);
+        const totalTokens = calls * (inputTokensPerCall + outTokensPerCall);
+        const rec = _recommendRunMode(estimatedSeconds, calls, !!params.use_judge, !!params.use_rag);
+        el.textContent = `Est.: ${formatEstimate(estimatedSeconds)} · ${_tokensLabel(totalTokens)} · ${rec.replace('Recommendation: ', '')}`;
+        el.title = `${rec}. Calls: ${calls}. Source: local fallback estimate.`;
+    }
+}
+
 function updateEstimatedTime() {
     updateEstimatedTimeFromApi();
+    updateCompareEstimate();
+    updateMatrixEstimate();
+    updateDatasetEstimate();
 }
 
 async function updateEstimatedTimeFromApi() {
@@ -484,36 +552,78 @@ async function updateEstimatedTimeFromApi() {
     const variantCount = document.querySelectorAll('.prompt-wrap textarea').length || 1;
     const requestId = ++etaRequestId;
 
-    try {
-        const res = await fetch('/api/eta', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                operation: 'evaluate',
-                model: selectedModel,
-                prompt_count: variantCount,
-                use_judge: fastMode ? false : useJudge,
-                use_rag: fastMode ? false : useRag,
-                fast_mode: fastMode,
-                max_tokens: fastMode ? 160 : null
-            })
-        });
+    await renderComputeEstimate('evaluate-time-estimate', {
+        operation: 'evaluate',
+        model: selectedModel,
+        prompt_count: variantCount,
+        use_judge: fastMode ? false : useJudge,
+        use_rag: fastMode ? false : useRag,
+        fast_mode: fastMode,
+        max_tokens: fastMode ? 128 : null,
+        sample_texts: [
+            document.getElementById('query-input')?.value || '',
+            ...Array.from(document.querySelectorAll('.prompt-wrap textarea')).map(t => t.value || '')
+        ]
+    });
+    if (requestId !== etaRequestId) return;
+    const txt = el.textContent || '';
+    el.textContent = `Estimated analysis time: ${txt.replace(/^Est:\s*/, '')} (${variantCount} prompt${variantCount > 1 ? 's' : ''})`;
+}
 
-        if (!res.ok) throw new Error('ETA request failed');
-        const eta = await res.json();
+function _lineCount(text) {
+    const lines = (text || '').split('\n').map(s => s.trim()).filter(Boolean);
+    return lines.length;
+}
 
-        // Ignore stale async responses.
-        if (requestId !== etaRequestId) return;
+function updateCompareEstimate() {
+    const promptsRaw = document.getElementById('compare-prompts')?.value || '';
+    const expected = document.getElementById('compare-expected')?.value || '';
+    const count = Math.max(1, _lineCount(promptsRaw));
+    const promptLines = promptsRaw.split('\n').map(s => s.trim()).filter(Boolean);
+    renderComputeEstimate('compare-compute-estimate', {
+        operation: 'compare',
+        model: selectedModel,
+        prompt_count: count,
+        use_judge: fastMode ? false : useJudge,
+        use_rag: false,
+        fast_mode: fastMode,
+        max_tokens: fastMode ? 128 : null,
+        sample_texts: [...promptLines, expected]
+    });
+}
 
-        const src = eta.uses_runtime_samples ? 'learned' : 'default';
-        el.textContent = `Estimated analysis time: ${formatEstimate(eta.estimated_seconds)} (${variantCount} prompt${variantCount > 1 ? 's' : ''}, ${src})`;
-    } catch (_) {
-        const secPerPrompt = MODEL_SEC_PER_PROMPT[selectedModel] || 3.0;
-        const judgeMultiplier = useJudge ? 1.35 : 1;
-        const ragMultiplier = useRag ? 1.2 : 1;
-        const estimatedSeconds = variantCount * secPerPrompt * judgeMultiplier * ragMultiplier;
-        el.textContent = `Estimated analysis time: ${formatEstimate(estimatedSeconds)} (${variantCount} prompt${variantCount > 1 ? 's' : ''})`;
-    }
+function updateMatrixEstimate() {
+    const promptsRaw = document.getElementById('matrix-prompts')?.value || '';
+    const expected = document.getElementById('matrix-expected')?.value || '';
+    const promptLines = promptsRaw.split('\n').map(s => s.trim()).filter(Boolean);
+    const modelCount = document.querySelectorAll('#matrix-model-checkboxes input[type="checkbox"]:checked').length || 1;
+    const calls = Math.max(1, promptLines.length || 1) * modelCount;
+    const matrixJudge = document.getElementById('matrix-judge-toggle')?.checked || false;
+    renderComputeEstimate('matrix-compute-estimate', {
+        operation: 'matrix',
+        model: selectedModel,
+        prompt_count: calls,
+        use_judge: fastMode ? false : matrixJudge,
+        use_rag: false,
+        fast_mode: fastMode,
+        max_tokens: fastMode ? 128 : null,
+        sample_texts: [...promptLines, expected]
+    });
+}
+
+function updateDatasetEstimate() {
+    const count = Math.max(1, datasetPrompts.length || 1);
+    const sample = datasetPrompts.slice(0, 5).map(r => `${r.prompt || ''}\n${r.expected_output || ''}`);
+    renderComputeEstimate('dataset-compute-estimate', {
+        operation: 'batch',
+        model: selectedModel,
+        prompt_count: count,
+        use_judge: fastMode ? false : useJudge,
+        use_rag: false,
+        fast_mode: fastMode,
+        max_tokens: fastMode ? 128 : null,
+        sample_texts: sample
+    });
 }
 
 
@@ -877,6 +987,7 @@ function parseCSV(text) {
     window._datasetBatchResults = null;
 
     toast(`Loaded ${datasetPrompts.length} questions from CSV`, 'success');
+    updateDatasetEstimate();
 }
 
 function parseCSVLine(line) {
@@ -907,6 +1018,7 @@ function clearDataset() {
     document.getElementById('btn-opt-batch').style.display = 'none';
     document.getElementById('btn-export-opt').style.display = 'none';
     document.getElementById('btn-export-bundle-ds').style.display = 'none';
+    updateDatasetEstimate();
 }
 
 async function runBatchEval() {
@@ -1184,6 +1296,10 @@ function populateMatrixModels() {
             <span class="model-check-tag">${m.speed_tag || 'standard'}</span>
         </label>`
     ).join('');
+    container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', updateMatrixEstimate);
+    });
+    updateMatrixEstimate();
 }
 
 function getSelectedMatrixModels() {
