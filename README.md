@@ -9,7 +9,6 @@
 </div>
 
 <br/>
-> **🔗 Demo Video:**https://drive.google.com/drive/u/1/folders/1zFV22sD0uPswTNsIVWLi4JWPNqO_FjfA.
 
 > **🎥 Demo Videos:** [Google Drive Folder](https://drive.google.com/drive/u/1/folders/1zFV22sD0uPswTNsIVWLi4JWPNqO_FjfA)
 >
